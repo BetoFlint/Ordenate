@@ -3,12 +3,18 @@ import os
 import zipfile
 from datetime import date, datetime
 
+from logger import log_time
+
 import altair as alt
 import pandas as pd
 import streamlit as st
 
 try:
     from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode, GridUpdateMode, JsCode
+    try:
+        _AGGRID_VERSION = getattr(__import__("st_aggrid"), "__version__", None)
+    except Exception:
+        _AGGRID_VERSION = None
 
     _AGGRID_AVAILABLE = True
 except Exception:
@@ -18,6 +24,7 @@ except Exception:
     GridUpdateMode = None
     JsCode = None
     _AGGRID_AVAILABLE = False
+    _AGGRID_VERSION = None
 
 
 DATA_FILE = "presupuesto.xlsx"
@@ -106,6 +113,7 @@ def _empty_comentarios_df() -> pd.DataFrame:
     return pd.DataFrame(columns=["comentario"])
 
 
+@log_time
 def _read_data_file(path: str) -> dict:
     data = {
         "gastos": pd.read_excel(path, sheet_name="gastos"),
@@ -173,6 +181,8 @@ def _ensure_data_file(path: str) -> None:
     _write_empty_data_file(path)
 
 
+@st.cache_data
+@log_time
 def _load_data(path: str) -> dict:
     _ensure_data_file(path)
     try:
@@ -199,6 +209,7 @@ def _load_data(path: str) -> dict:
             st.stop()
 
 
+@log_time
 def _save_data(path: str, data: dict) -> None:
     temp_path = f"{path}.tmp.xlsx"
     gastos_mensuales_df = data.get("gastos_mensuales", _empty_gastos_mensuales_df())
@@ -360,26 +371,29 @@ def _render_aggrid_sum_view(df: pd.DataFrame, key: str) -> None:
             }
             """
         )
+
     numeric_cols = df.select_dtypes(include=["number"]).columns
     for col in numeric_cols:
         col_name = str(col).lower()
         if col_name.endswith("_id") or col_name == "id":
             continue
         if number_formatter is not None:
-            builder.configure_column(col, valueFormatter=number_formatter)
+            builder.configure_column(col, valueFormatter=number_formatter, aggFunc="sum")
+        else:
+            builder.configure_column(col, aggFunc="sum")
+
     builder.configure_grid_options(
         enableRangeSelection=True,
         statusBar={
             "statusPanels": [
                 {
                     "statusPanel": "agAggregationComponent",
-                    "statusPanelParams": {
-                        "aggFuncs": ["sum", "avg", "min", "max", "count"]
-                    },
+                    "statusPanelParams": {"aggFuncs": ["sum"]},
                 }
             ]
         },
     )
+
     AgGrid(
         df,
         gridOptions=builder.build(),
@@ -720,12 +734,14 @@ def _apply_editor_ingresos(editor_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+@st.cache_data
 def _build_gastos_por_mes_table(
     gastos_df: pd.DataFrame,
     year: int,
     gastos_mensuales_df: pd.DataFrame | None = None,
     include_gasto_id: bool = False,
 ) -> pd.DataFrame:
+    
     if gastos_df.empty:
         return pd.DataFrame()
     month_labels = [_month_label(month) for month in range(1, 13)]
@@ -759,6 +775,7 @@ def _build_gastos_por_mes_table(
     return table_df[["Gasto", "Categoria", *month_labels]].reset_index(drop=True)
 
 
+@st.cache_data
 def _build_ingresos_por_mes_table(
     ingresos_df: pd.DataFrame,
     year: int,
@@ -794,9 +811,16 @@ def _build_ingresos_por_mes_table(
     return table_df[["Ingreso", "Periodicidad", *month_labels]]
 
 
+@log_time
 def main() -> None:
     st.set_page_config(page_title="Presupuesto Familiar", layout="wide")
     st.title("Presupuesto familiar")
+    # Mostrar estado de AgGrid para facilitar debugging
+    try:
+        aggrid_status = "Disponible" if _AGGRID_AVAILABLE else "No disponible"
+    except NameError:
+        aggrid_status = "No disponible"
+    st.sidebar.info(f"AgGrid: {aggrid_status}  {'v' + _AGGRID_VERSION if _AGGRID_AVAILABLE and _AGGRID_VERSION else ''}")
 
     data = _load_data(DATA_FILE)
     gastos_df = data["gastos"].copy()
@@ -945,7 +969,6 @@ def main() -> None:
         if gastos_df.empty:
             st.info("No hay gastos registrados.")
         else:
-            st.markdown("**Gastos presupuestados por mes (editable)**")
             editable_table = _build_gastos_por_mes_table(
                 gastos_df,
                 selected_year,
@@ -955,90 +978,94 @@ def main() -> None:
             month_labels = [_month_label(month) for month in range(1, 13)]
             editable_display = _format_amount_columns(editable_table, month_labels)
             editable_display.insert(0, "Eliminar", False)
-            editable_ajustes_df = st.data_editor(
-                editable_display,
-                use_container_width=True,
-                hide_index=True,
-                disabled=["Gasto", "Categoria"],
-                column_config={
-                    "Eliminar": st.column_config.CheckboxColumn(
-                        "Eliminar",
-                        help="Marca para eliminar el gasto completo",
-                    )
-                },
-                key="ajustes_mes_editor",
+
+            tab_gastos_editable, tab_gastos_aggrid = st.tabs(
+                ["Editor de Gastos", "Plug Excel"]
             )
-            confirmar_eliminacion = st.checkbox(
-                "Confirmar eliminacion de gastos seleccionados",
-                key="confirm_del_gasto_anual",
-            )
-            if st.button(
-                "Eliminar seleccionados",
-                disabled=not confirmar_eliminacion,
-                key="delete_gastos_anual",
-            ):
-                delete_ids = (
-                    editable_ajustes_df[editable_ajustes_df["Eliminar"] == True]
-                    .index.astype(int)
-                    .tolist()
+            with tab_gastos_editable:
+                editable_ajustes_df = st.data_editor(
+                    editable_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=["Gasto", "Categoria"],
+                    column_config={
+                        "Eliminar": st.column_config.CheckboxColumn(
+                            "Eliminar",
+                            help="Marca para eliminar el gasto completo",
+                        )
+                    },
+                    key="ajustes_mes_editor",
                 )
-                if not delete_ids:
-                    st.info("No hay gastos marcados para eliminar.")
-                else:
-                    gastos_df = gastos_df[~gastos_df["gasto_id"].isin(delete_ids)]
-                    pagos_df = pagos_df[~pagos_df["gasto_id"].isin(delete_ids)]
-                    if not gastos_mensuales_df.empty:
-                        gastos_mensuales_df = gastos_mensuales_df[
-                            ~gastos_mensuales_df["gasto_id"].isin(delete_ids)
+                confirmar_eliminacion = st.checkbox(
+                    "Confirmar eliminacion de gastos seleccionados",
+                    key="confirm_del_gasto_anual",
+                )
+                if st.button(
+                    "Eliminar seleccionados",
+                    disabled=not confirmar_eliminacion,
+                    key="delete_gastos_anual",
+                ):
+                    delete_ids = (
+                        editable_ajustes_df[editable_ajustes_df["Eliminar"] == True]
+                        .index.astype(int)
+                        .tolist()
+                    )
+                    if not delete_ids:
+                        st.info("No hay gastos marcados para eliminar.")
+                    else:
+                        gastos_df = gastos_df[~gastos_df["gasto_id"].isin(delete_ids)]
+                        pagos_df = pagos_df[~pagos_df["gasto_id"].isin(delete_ids)]
+                        if not gastos_mensuales_df.empty:
+                            gastos_mensuales_df = gastos_mensuales_df[
+                                ~gastos_mensuales_df["gasto_id"].isin(delete_ids)
+                            ]
+                        data["gastos"] = gastos_df
+                        data["pagos"] = pagos_df
+                        data["gastos_mensuales"] = gastos_mensuales_df
+                        _save_data(DATA_FILE, data)
+                        st.success("Gastos eliminados.")
+                        st.rerun()
+                if st.button("Guardar montos del anio"):
+                    new_rows = []
+                    for gasto_id, row in editable_ajustes_df.iterrows():
+                        for month in range(1, 13):
+                            label = _month_label(month)
+                            edited_val = _parse_amount(row.get(label))
+                            new_rows.append(
+                                {
+                                    "gasto_id": int(gasto_id),
+                                    "year": int(selected_year),
+                                    "month": int(month),
+                                    "monto_presupuestado": float(edited_val),
+                                }
+                            )
+
+                    if gastos_mensuales_df.empty:
+                        other_rows = _empty_gastos_mensuales_df()
+                    else:
+                        other_rows = gastos_mensuales_df[
+                            gastos_mensuales_df["year"].astype(int) != int(selected_year)
                         ]
-                    data["gastos"] = gastos_df
-                    data["pagos"] = pagos_df
+                    gastos_mensuales_df = pd.concat(
+                        [other_rows, pd.DataFrame(new_rows)], ignore_index=True
+                    )
+                    if gastos_mensuales_df.empty:
+                        gastos_mensuales_df = _empty_gastos_mensuales_df()
                     data["gastos_mensuales"] = gastos_mensuales_df
                     _save_data(DATA_FILE, data)
-                    st.success("Gastos eliminados.")
+                    refreshed_table = _build_gastos_por_mes_table(
+                        gastos_df,
+                        selected_year,
+                        gastos_mensuales_df,
+                        include_gasto_id=True,
+                    ).set_index("gasto_id")
+                    refreshed_display = _format_amount_columns(
+                        refreshed_table,
+                        [_month_label(month) for month in range(1, 13)],
+                    )
                     st.rerun()
-            if st.button("Guardar montos del anio"):
-                new_rows = []
-                for gasto_id, row in editable_ajustes_df.iterrows():
-                    for month in range(1, 13):
-                        label = _month_label(month)
-                        edited_val = _parse_amount(row.get(label))
-                        new_rows.append(
-                            {
-                                "gasto_id": int(gasto_id),
-                                "year": int(selected_year),
-                                "month": int(month),
-                                "monto_presupuestado": float(edited_val),
-                            }
-                        )
-
-                if gastos_mensuales_df.empty:
-                    other_rows = _empty_gastos_mensuales_df()
-                else:
-                    other_rows = gastos_mensuales_df[
-                        gastos_mensuales_df["year"].astype(int) != int(selected_year)
-                    ]
-                gastos_mensuales_df = pd.concat(
-                    [other_rows, pd.DataFrame(new_rows)], ignore_index=True
-                )
-                if gastos_mensuales_df.empty:
-                    gastos_mensuales_df = _empty_gastos_mensuales_df()
-                data["gastos_mensuales"] = gastos_mensuales_df
-                _save_data(DATA_FILE, data)
-                refreshed_table = _build_gastos_por_mes_table(
-                    gastos_df,
-                    selected_year,
-                    gastos_mensuales_df,
-                    include_gasto_id=True,
-                ).set_index("gasto_id")
-                refreshed_display = _format_amount_columns(
-                    refreshed_table,
-                    [_month_label(month) for month in range(1, 13)],
-                )
-                st.rerun()
-                st.success("Montos guardados.")
-
-            with st.expander("Sumar seleccion (AgGrid)", expanded=False):
+                    st.success("Montos guardados.")
+            with tab_gastos_aggrid:
                 aggrid_df = editable_table.reset_index()
                 _render_aggrid_sum_view(aggrid_df, key="aggrid_gastos_mes")
 
@@ -1054,55 +1081,59 @@ def main() -> None:
             ).set_index("ingreso_id")
             ingresos_month_labels = [_month_label(month) for month in range(1, 13)]
             ingresos_display = _format_amount_columns(ingresos_editable, ingresos_month_labels)
-            ingresos_editor_df = st.data_editor(
-                ingresos_display,
-                use_container_width=True,
-                hide_index=True,
-                disabled=["Ingreso", "Periodicidad"],
-                key="ingresos_mes_editor",
+
+            tab_ing_editable, tab_ing_aggrid = st.tabs(
+                ["Editor de Ingresos", "Plug Excel"]
             )
-            if st.button("Guardar montos de ingresos del anio"):
-                new_rows = []
-                for ingreso_id, row in ingresos_editor_df.iterrows():
-                    for month in range(1, 13):
-                        label = _month_label(month)
-                        edited_val = _parse_amount(row.get(label))
-                        new_rows.append(
-                            {
-                                "ingreso_id": int(ingreso_id),
-                                "year": int(selected_year),
-                                "month": int(month),
-                                "monto": float(edited_val),
-                            }
-                        )
-
-                if ingresos_mensuales_df.empty:
-                    other_rows = _empty_ingresos_mensuales_df()
-                else:
-                    other_rows = ingresos_mensuales_df[
-                        ingresos_mensuales_df["year"].astype(int) != int(selected_year)
-                    ]
-                ingresos_mensuales_df = pd.concat(
-                    [other_rows, pd.DataFrame(new_rows)], ignore_index=True
+            with tab_ing_editable:
+                ingresos_editor_df = st.data_editor(
+                    ingresos_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=["Ingreso", "Periodicidad"],
+                    key="ingresos_mes_editor",
                 )
-                if ingresos_mensuales_df.empty:
-                    ingresos_mensuales_df = _empty_ingresos_mensuales_df()
-                data["ingresos_mensuales"] = ingresos_mensuales_df
-                _save_data(DATA_FILE, data)
-                refreshed_table = _build_ingresos_por_mes_table(
-                    ingresos_df,
-                    selected_year,
-                    ingresos_mensuales_df,
-                    include_ingreso_id=True,
-                ).set_index("ingreso_id")
-                refreshed_display = _format_amount_columns(
-                    refreshed_table,
-                    [_month_label(month) for month in range(1, 13)],
-                )
-                st.rerun()
-                st.success("Montos de ingresos guardados.")
+                if st.button("Guardar montos de ingresos del anio"):
+                    new_rows = []
+                    for ingreso_id, row in ingresos_editor_df.iterrows():
+                        for month in range(1, 13):
+                            label = _month_label(month)
+                            edited_val = _parse_amount(row.get(label))
+                            new_rows.append(
+                                {
+                                    "ingreso_id": int(ingreso_id),
+                                    "year": int(selected_year),
+                                    "month": int(month),
+                                    "monto": float(edited_val),
+                                }
+                            )
 
-            with st.expander("Sumar seleccion (AgGrid)", expanded=False):
+                    if ingresos_mensuales_df.empty:
+                        other_rows = _empty_ingresos_mensuales_df()
+                    else:
+                        other_rows = ingresos_mensuales_df[
+                            ingresos_mensuales_df["year"].astype(int) != int(selected_year)
+                        ]
+                    ingresos_mensuales_df = pd.concat(
+                        [other_rows, pd.DataFrame(new_rows)], ignore_index=True
+                    )
+                    if ingresos_mensuales_df.empty:
+                        ingresos_mensuales_df = _empty_ingresos_mensuales_df()
+                    data["ingresos_mensuales"] = ingresos_mensuales_df
+                    _save_data(DATA_FILE, data)
+                    refreshed_table = _build_ingresos_por_mes_table(
+                        ingresos_df,
+                        selected_year,
+                        ingresos_mensuales_df,
+                        include_ingreso_id=True,
+                    ).set_index("ingreso_id")
+                    refreshed_display = _format_amount_columns(
+                        refreshed_table,
+                        [_month_label(month) for month in range(1, 13)],
+                    )
+                    st.rerun()
+                    st.success("Montos de ingresos guardados.")
+            with tab_ing_aggrid:
                 aggrid_df = ingresos_editable.reset_index()
                 _render_aggrid_sum_view(aggrid_df, key="aggrid_ingresos_mes")
 
@@ -1418,8 +1449,12 @@ def main() -> None:
             annual_pivot,
             [label for label, _ in months],
         )
-        st.dataframe(annual_pivot_display, use_container_width=True)
-        with st.expander("Sumar seleccion (AgGrid)", expanded=False):
+        tab_res_normal, tab_res_aggrid = st.tabs(
+            ["Tabla normal", "Sumar seleccion (AgGrid)"]
+        )
+        with tab_res_normal:
+            st.dataframe(annual_pivot_display, use_container_width=True)
+        with tab_res_aggrid:
             _render_aggrid_sum_view(annual_pivot.reset_index(), key="aggrid_resumen_anual")
         chart_df = annual_df.melt(
             id_vars=["Mes"],

@@ -1,0 +1,190 @@
+2026-02-18 14:14:22,337 INFO START main()
+2026-02-18 14:14:22,350 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:14:22,351 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:14:22,623 INFO END _read_data_file elapsed=0.271835s
+2026-02-18 14:14:22,623 INFO END _load_data elapsed=0.272870s
+2026-02-18 14:14:22,637 INFO END main elapsed=0.294685s
+2026-02-18 14:15:10,676 INFO START main()
+2026-02-18 14:15:10,676 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:15:10,676 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:15:10,816 INFO END _read_data_file elapsed=0.137738s
+2026-02-18 14:15:10,816 INFO END _load_data elapsed=0.138612s
+2026-02-18 14:15:11,077 INFO END main elapsed=0.398591s
+2026-02-18 14:16:21,891 INFO START main()
+2026-02-18 14:16:21,891 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:16:21,891 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:16:22,036 INFO END _read_data_file elapsed=0.134794s
+2026-02-18 14:16:22,036 INFO END _load_data elapsed=0.135638s
+2026-02-18 14:16:22,179 INFO END main elapsed=0.280373s
+2026-02-18 14:17:30,175 INFO START main()
+2026-02-18 14:17:30,176 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:17:30,176 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:17:30,318 INFO END _read_data_file elapsed=0.140440s
+2026-02-18 14:17:30,318 INFO END _load_data elapsed=0.141515s
+2026-02-18 14:17:30,469 INFO END main elapsed=0.294911s
+2026-02-18 14:19:08,183 INFO START main()
+2026-02-18 14:19:08,203 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:19:08,204 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:19:08,576 INFO END _read_data_file elapsed=0.371198s
+2026-02-18 14:19:08,576 INFO END _load_data elapsed=0.372361s
+2026-02-18 14:19:08,783 INFO END main elapsed=0.587747s
+2026-02-18 14:19:40,424 INFO START main()
+2026-02-18 14:19:40,426 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:19:40,427 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:19:40,579 INFO END _read_data_file elapsed=0.152092s
+2026-02-18 14:19:40,579 INFO END _load_data elapsed=0.153344s
+2026-02-18 14:19:40,771 INFO END main elapsed=0.345587s
+2026-02-18 14:19:44,454 INFO START main()
+2026-02-18 14:19:44,454 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:19:44,454 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:19:44,596 INFO END _read_data_file elapsed=0.137286s
+2026-02-18 14:19:44,596 INFO END _load_data elapsed=0.138221s
+2026-02-18 14:19:44,733 INFO END main elapsed=0.275340s
+2026-02-18 14:21:30,303 INFO START main()
+2026-02-18 14:21:30,303 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:21:30,303 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:21:30,439 INFO END _read_data_file elapsed=0.133036s
+2026-02-18 14:21:30,439 INFO END _load_data elapsed=0.134000s
+2026-02-18 14:21:30,602 INFO END main elapsed=0.291478s
+2026-02-18 14:25:42,690 INFO START main()
+2026-02-18 14:25:42,699 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:25:42,699 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:25:43,077 INFO END _read_data_file elapsed=0.381553s
+2026-02-18 14:25:43,077 INFO END _load_data elapsed=0.382459s
+2026-02-18 14:25:43,280 INFO END main elapsed=0.588529s
+2026-02-18 14:29:41,361 INFO START main()
+2026-02-18 14:29:41,368 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:29:41,369 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:29:41,712 INFO END _read_data_file elapsed=0.354798s
+2026-02-18 14:29:41,712 INFO END _load_data elapsed=0.355716s
+2026-02-18 14:29:41,798 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:29:41,847 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:29:41,933 INFO END main elapsed=0.571849s
+2026-02-18 14:31:41,489 INFO START main()
+2026-02-18 14:31:41,531 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:31:41,544 ERROR AgGrid SERIALIZE measurement failed
+Traceback (most recent call last):
+  File "C:\Users\BetoFlint\Desktop\Proyecto Ppto\App.py", line 402, in _render_aggrid_sum_view
+    t0 = time.perf_counter()
+         ^^^^
+NameError: name 'time' is not defined
+2026-02-18 14:31:41,568 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:31:41,581 ERROR AgGrid SERIALIZE measurement failed
+Traceback (most recent call last):
+  File "C:\Users\BetoFlint\Desktop\Proyecto Ppto\App.py", line 402, in _render_aggrid_sum_view
+    t0 = time.perf_counter()
+         ^^^^
+NameError: name 'time' is not defined
+2026-02-18 14:31:41,647 INFO END main elapsed=0.152051s
+2026-02-18 14:32:23,943 INFO START main()
+2026-02-18 14:32:23,983 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:32:23,997 INFO AgGrid SERIALIZE size=9533B elapsed=0.000332s key=aggrid_gastos_mes
+2026-02-18 14:32:24,018 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:32:24,029 INFO AgGrid SERIALIZE size=1575B elapsed=0.000127s key=aggrid_ingresos_mes
+2026-02-18 14:32:24,096 INFO END main elapsed=0.148674s
+2026-02-18 14:33:57,686 INFO START main()
+2026-02-18 14:33:57,731 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:33:57,745 INFO AgGrid SERIALIZE size=9533B elapsed=0.000309s key=aggrid_gastos_mes
+2026-02-18 14:33:57,752 INFO AgGrid CALL elapsed=0.006451s key=aggrid_gastos_mes
+2026-02-18 14:33:57,771 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:33:57,783 INFO AgGrid SERIALIZE size=1575B elapsed=0.000122s key=aggrid_ingresos_mes
+2026-02-18 14:33:57,791 INFO AgGrid CALL elapsed=0.007192s key=aggrid_ingresos_mes
+2026-02-18 14:33:57,851 INFO END main elapsed=0.156419s
+2026-02-18 14:36:37,689 INFO START main()
+2026-02-18 14:36:37,712 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:36:37,712 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:36:38,074 INFO END _read_data_file elapsed=0.362998s
+2026-02-18 14:36:38,074 INFO END _load_data elapsed=0.363880s
+2026-02-18 14:36:38,150 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:36:38,164 INFO AgGrid SERIALIZE size=9533B elapsed=0.000374s key=aggrid_gastos_mes
+2026-02-18 14:36:38,184 INFO AgGrid CALL elapsed=0.018238s key=aggrid_gastos_mes
+2026-02-18 14:36:38,209 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:36:38,229 INFO AgGrid SERIALIZE size=1575B elapsed=0.000217s key=aggrid_ingresos_mes
+2026-02-18 14:36:38,238 INFO AgGrid CALL elapsed=0.008316s key=aggrid_ingresos_mes
+2026-02-18 14:36:38,299 INFO END main elapsed=0.595378s
+2026-02-18 14:36:44,908 INFO START main()
+2026-02-18 14:36:44,948 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:36:44,965 INFO AgGrid SERIALIZE size=9533B elapsed=0.000299s key=aggrid_gastos_mes
+2026-02-18 14:36:44,974 INFO AgGrid CALL elapsed=0.008541s key=aggrid_gastos_mes
+2026-02-18 14:36:44,992 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:36:45,004 INFO AgGrid SERIALIZE size=1575B elapsed=0.000133s key=aggrid_ingresos_mes
+2026-02-18 14:36:45,012 INFO AgGrid CALL elapsed=0.008208s key=aggrid_ingresos_mes
+2026-02-18 14:36:45,069 INFO END main elapsed=0.159019s
+2026-02-18 14:37:31,385 INFO START main()
+2026-02-18 14:37:31,427 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:37:31,442 INFO AgGrid SERIALIZE size=9533B elapsed=0.000373s key=aggrid_gastos_mes
+2026-02-18 14:37:31,452 INFO AgGrid CALL elapsed=0.008429s key=aggrid_gastos_mes
+2026-02-18 14:37:31,471 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:37:31,483 INFO AgGrid SERIALIZE size=1575B elapsed=0.000181s key=aggrid_ingresos_mes
+2026-02-18 14:37:31,490 INFO AgGrid CALL elapsed=0.007145s key=aggrid_ingresos_mes
+2026-02-18 14:37:31,556 INFO END main elapsed=0.168647s
+2026-02-18 14:49:15,621 INFO START main()
+2026-02-18 14:49:15,632 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:49:15,633 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:49:16,027 INFO END _read_data_file elapsed=0.394035s
+2026-02-18 14:49:16,028 INFO END _load_data elapsed=0.395288s
+2026-02-18 14:49:16,104 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:49:16,114 INFO AgGrid SERIALIZE size=9533B elapsed=0.000357s key=aggrid_gastos_mes
+2026-02-18 14:49:16,131 INFO AgGrid CALL elapsed=0.015800s key=aggrid_gastos_mes
+2026-02-18 14:49:16,147 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:49:16,162 INFO AgGrid SERIALIZE size=1575B elapsed=0.000139s key=aggrid_ingresos_mes
+2026-02-18 14:49:16,168 INFO AgGrid CALL elapsed=0.005875s key=aggrid_ingresos_mes
+2026-02-18 14:49:16,232 INFO END main elapsed=0.607375s
+2026-02-18 14:49:24,271 INFO START main()
+2026-02-18 14:49:24,311 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:49:24,324 INFO AgGrid SERIALIZE size=9533B elapsed=0.000244s key=aggrid_gastos_mes
+2026-02-18 14:49:24,330 INFO AgGrid CALL elapsed=0.007771s key=aggrid_gastos_mes
+2026-02-18 14:49:24,347 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:49:24,357 INFO AgGrid SERIALIZE size=1575B elapsed=0.000126s key=aggrid_ingresos_mes
+2026-02-18 14:49:24,365 INFO AgGrid CALL elapsed=0.007258s key=aggrid_ingresos_mes
+2026-02-18 14:49:24,422 INFO END main elapsed=0.148528s
+2026-02-18 14:49:51,812 INFO START main()
+2026-02-18 14:49:51,849 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:49:51,858 INFO AgGrid SERIALIZE size=9533B elapsed=0.000249s key=aggrid_gastos_mes
+2026-02-18 14:49:51,867 INFO AgGrid CALL elapsed=0.008007s key=aggrid_gastos_mes
+2026-02-18 14:49:51,884 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:49:51,893 INFO AgGrid SERIALIZE size=1575B elapsed=0.000222s key=aggrid_ingresos_mes
+2026-02-18 14:49:51,902 INFO AgGrid CALL elapsed=0.007882s key=aggrid_ingresos_mes
+2026-02-18 14:49:51,974 INFO END main elapsed=0.161047s
+2026-02-18 14:49:56,899 INFO START main()
+2026-02-18 14:49:56,937 INFO AgGrid PREP rows=36 cols=15 mem=8594B est_payload=10312B key=aggrid_gastos_mes
+2026-02-18 14:49:56,948 INFO AgGrid SERIALIZE size=9533B elapsed=0.000245s key=aggrid_gastos_mes
+2026-02-18 14:49:56,956 INFO AgGrid CALL elapsed=0.007146s key=aggrid_gastos_mes
+2026-02-18 14:49:56,973 INFO AgGrid PREP rows=6 cols=15 mem=1705B est_payload=2046B key=aggrid_ingresos_mes
+2026-02-18 14:49:56,980 INFO AgGrid SERIALIZE size=1575B elapsed=0.000132s key=aggrid_ingresos_mes
+2026-02-18 14:49:56,990 INFO AgGrid CALL elapsed=0.008910s key=aggrid_ingresos_mes
+2026-02-18 14:49:57,070 INFO END main elapsed=0.168352s
+2026-02-18 14:53:12,949 INFO START main()
+2026-02-18 14:53:12,958 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:53:12,959 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:53:13,320 INFO END _read_data_file elapsed=0.362371s
+2026-02-18 14:53:13,320 INFO END _load_data elapsed=0.363312s
+2026-02-18 14:53:13,489 INFO END main elapsed=0.539575s
+2026-02-18 14:58:18,675 INFO START main()
+2026-02-18 14:58:18,696 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:58:18,697 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:58:19,038 INFO END _read_data_file elapsed=0.354202s
+2026-02-18 14:58:19,038 INFO END _load_data elapsed=0.355237s
+2026-02-18 14:58:19,232 INFO END main elapsed=0.543582s
+2026-02-18 14:59:30,104 INFO START main()
+2026-02-18 14:59:30,112 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 14:59:30,113 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 14:59:30,473 INFO END _read_data_file elapsed=0.359630s
+2026-02-18 14:59:30,473 INFO END _load_data elapsed=0.360598s
+2026-02-18 14:59:30,653 INFO END main elapsed=0.547392s
+2026-02-18 15:01:45,103 INFO START main()
+2026-02-18 15:01:45,112 INFO START _load_data('presupuesto.xlsx')
+2026-02-18 15:01:45,113 INFO START _read_data_file('presupuesto.xlsx')
+2026-02-18 15:01:45,494 INFO END _read_data_file elapsed=0.385761s
+2026-02-18 15:01:45,494 INFO END _load_data elapsed=0.386650s
+2026-02-18 15:01:45,702 INFO END main elapsed=0.597123s
+2026-02-18 15:07:30,183 INFO START main()
+2026-02-18 15:07:30,320 INFO END main elapsed=0.136839s
+2026-02-18 15:07:37,800 INFO START main()
+2026-02-18 15:07:37,938 INFO END main elapsed=0.132373s
+2026-02-18 15:07:41,241 INFO START main()
+2026-02-18 15:07:41,368 INFO END main elapsed=0.124101s
+2026-02-18 15:08:45,032 INFO START main()
+2026-02-18 15:08:45,174 INFO END main elapsed=0.141999s
+2026-02-18 15:09:18,371 INFO START main()
+2026-02-18 15:09:18,499 INFO END main elapsed=0.124575s
