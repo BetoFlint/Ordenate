@@ -9,6 +9,8 @@ Provee:
 
 from __future__ import annotations
 
+import os
+
 import psycopg2
 import psycopg2.extras
 import streamlit as st
@@ -17,7 +19,15 @@ from logger import log_time
 
 
 def _get_db_url() -> str:
-    """Lee la URL de conexión desde st.secrets (archivo .streamlit/secrets.toml)."""
+    """Lee la URL de conexión.
+
+    Prioridad:
+      1. Variable de entorno DATABASE_URL  (Render / producción)
+      2. st.secrets["database"]["url"]     (desarrollo local)
+    """
+    env_url = os.environ.get("DATABASE_URL")
+    if env_url:
+        return env_url
     return st.secrets["database"]["url"]
 
 

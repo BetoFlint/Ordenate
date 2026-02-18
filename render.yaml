@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ordenate
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run App.py
+    envVars:
+      - key: DATABASE_URL
+        sync: false   # se ingresa manualmente en el dashboard de Render
+    autoDeploy: true

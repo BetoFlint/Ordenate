@@ -10,6 +10,7 @@ API pública:
 
 from __future__ import annotations
 
+import os
 from datetime import date, datetime
 
 import pandas as pd
@@ -22,8 +23,13 @@ from logger import log_time
 
 
 def _get_engine():
-    """Devuelve un SQLAlchemy engine usando el URL de st.secrets."""
-    url = st.secrets["database"]["url"]
+    """Devuelve un SQLAlchemy engine.
+
+    Prioridad:
+      1. Variable de entorno DATABASE_URL  (Render / producción)
+      2. st.secrets["database"]["url"]     (desarrollo local)
+    """
+    url = os.environ.get("DATABASE_URL") or st.secrets["database"]["url"]
     sa_url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return create_engine(sa_url, pool_pre_ping=True)
 
