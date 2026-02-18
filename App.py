@@ -2,8 +2,8 @@ import calendar
 from datetime import date, datetime
 
 from logger import log_time
-from db import init_db
-from auth import verify_login
+from db import init_db, add_user_id_columns
+from auth import verify_login, create_user, user_exists, list_users
 from neon_data import load_data as _neon_load_data, save_data as _neon_save_data
 
 import altair as alt
@@ -69,15 +69,15 @@ def _empty_comentarios_df() -> pd.DataFrame:
 
 @st.cache_data
 @log_time
-def _load_data() -> dict:
-    """Carga todos los datos desde Neon. Cacheado por Streamlit."""
-    return _neon_load_data()
+def _load_data(user_id: int) -> dict:
+    """Carga los datos del usuario desde Neon. Cacheado por Streamlit."""
+    return _neon_load_data(user_id)
 
 
 @log_time
-def _save_data(data: dict) -> None:
+def _save_data(data: dict, user_id: int) -> None:
     """Persiste el dict de datos en Neon y limpia el cache para la próxima carga."""
-    _neon_save_data(data)
+    _neon_save_data(data, user_id)
     st.cache_data.clear()
 
 
@@ -671,6 +671,9 @@ def main() -> None:
     st.set_page_config(page_title="Presupuesto Familiar", layout="wide")
     st.title("Presupuesto familiar")
 
+    # --- user_id desde session_state ---
+    user_id: int = st.session_state.get("user_id", 1)
+
     # --- Sidebar: usuario y logout ---
     username = st.session_state.get("username", "")
     if username:
@@ -678,6 +681,7 @@ def main() -> None:
     if st.sidebar.button("Cerrar sesion", use_container_width=True):
         st.session_state["authenticated"] = False
         st.session_state["username"] = ""
+        st.session_state["user_id"] = None
         st.rerun()
     st.sidebar.divider()
 
@@ -688,7 +692,7 @@ def main() -> None:
         aggrid_status = "No disponible"
     st.sidebar.info(f"AgGrid: {aggrid_status}  {'v' + _AGGRID_VERSION if _AGGRID_AVAILABLE and _AGGRID_VERSION else ''}")
 
-    data = _load_data()
+    data = _load_data(user_id)
     gastos_df = data["gastos"].copy()
     pagos_df = data["pagos"].copy()
     ingresos_df = data["ingresos"].copy()
@@ -705,19 +709,19 @@ def main() -> None:
     if did_migrate:
         data["gastos_mensuales"] = gastos_mensuales_df
         data["ingresos_mensuales"] = ingresos_mensuales_df
-        _save_data(data)
+        _save_data(data, user_id)
+
+    _menu_opciones = ["Panel de Gastos", "Resumen", "Balance"]
+    if username == "admin":
+        _menu_opciones.append("Usuarios")
 
     menu = st.sidebar.radio(
         "Menu",
-        [
-            "Panel de Gastos",
-            "Resumen",
-            "Balance",
-        ],
+        _menu_opciones,
     )
 
     if menu == "Panel de Gastos":
-        with st.expander("Registrar gasto", expanded=False):
+        with st.expander("Ingresar Gasto", expanded=False):
             with st.form("form_gasto"):
                 nombre = st.text_input("Nombre del gasto")
                 categoria = st.selectbox("Categoria del gasto", CATEGORIAS)
@@ -764,11 +768,11 @@ def main() -> None:
                         new_row,
                     )
                     data["gastos_mensuales"] = gastos_mensuales_df
-                    _save_data(data)
+                    _save_data(data, user_id)
                     st.success("Gasto registrado.")
 
-        st.subheader("Registrar ingreso")
-        with st.expander("Registrar ingreso", expanded=False):
+        
+        with st.expander("Ingresar ingreso", expanded=False):
             with st.form("form_ingreso"):
                 nombre = st.text_input("Nombre del ingreso")
                 monto = st.number_input("Monto del ingreso", min_value=0.0, step=100.0)
@@ -810,7 +814,7 @@ def main() -> None:
                         new_ingreso,
                     )
                     data["ingresos_mensuales"] = ingresos_mensuales_df
-                    _save_data(data)
+                    _save_data(data, user_id)
                     st.success("Ingreso registrado.")
 
         current_year, current_month = _current_month()
@@ -888,7 +892,7 @@ def main() -> None:
                         data["gastos"] = gastos_df
                         data["pagos"] = pagos_df
                         data["gastos_mensuales"] = gastos_mensuales_df
-                        _save_data(data)
+                        _save_data(data, user_id)
                         st.success("Gastos eliminados.")
                         st.rerun()
                 if st.button("Guardar montos del anio"):
@@ -918,7 +922,7 @@ def main() -> None:
                     if gastos_mensuales_df.empty:
                         gastos_mensuales_df = _empty_gastos_mensuales_df()
                     data["gastos_mensuales"] = gastos_mensuales_df
-                    _save_data(data)
+                    _save_data(data, user_id)
                     refreshed_table = _build_gastos_por_mes_table(
                         gastos_df,
                         selected_year,
@@ -986,7 +990,7 @@ def main() -> None:
                     if ingresos_mensuales_df.empty:
                         ingresos_mensuales_df = _empty_ingresos_mensuales_df()
                     data["ingresos_mensuales"] = ingresos_mensuales_df
-                    _save_data(data)
+                    _save_data(data, user_id)
                     refreshed_table = _build_ingresos_por_mes_table(
                         ingresos_df,
                         selected_year,
@@ -1182,7 +1186,7 @@ def main() -> None:
                                 [pagos_df, pd.DataFrame(new_rows)], ignore_index=True
                             )
                             data["pagos"] = pagos_df
-                            _save_data(data)
+                            _save_data(data, user_id)
                             st.success("Pagos registrados.")
 
                         if skipped:
@@ -1373,7 +1377,7 @@ def main() -> None:
                 [{"comentario": comentario_input.strip()}]
             )
             data["comentarios"] = comentarios_df
-            _save_data(data)
+            _save_data(data, user_id)
             st.success("Comentario guardado.")
 
     if menu == "Balance":
@@ -1388,7 +1392,7 @@ def main() -> None:
         if st.button("Guardar saldo"):
             cuenta_df = _set_saldo(cuenta_df, float(saldo_input))
             data["cuenta"] = cuenta_df
-            _save_data(data)
+            _save_data(data, user_id)
             st.success("Saldo actualizado.")
 
         year, month = _current_month()
@@ -1495,6 +1499,51 @@ def main() -> None:
         else:
             st.info("No hay gastos pendientes este mes.")
 
+    elif menu == "Usuarios":
+        _render_gestion_usuarios()
+
+
+def _render_gestion_usuarios() -> None:
+    """Pantalla de gestión de usuarios: crear nuevos y ver lista existente."""
+    st.header("Gestion de Usuarios")
+
+    # ── Crear nuevo usuario ──────────────────────────────────────────────────
+    with st.expander("Agregar nuevo usuario", expanded=True):
+        with st.form("form_nuevo_usuario"):
+            nuevo_username = st.text_input("Nombre de usuario")
+            nueva_password = st.text_input("Contrasena", type="password")
+            confirmar_password = st.text_input("Confirmar contrasena", type="password")
+            submitted = st.form_submit_button("Crear usuario", use_container_width=True)
+
+        if submitted:
+            if not nuevo_username or not nueva_password:
+                st.error("Por favor completa todos los campos.")
+            elif nueva_password != confirmar_password:
+                st.error("Las contrasenas no coinciden.")
+            elif len(nueva_password) < 6:
+                st.error("La contrasena debe tener al menos 6 caracteres.")
+            elif user_exists(nuevo_username):
+                st.error(f"El usuario '{nuevo_username}' ya existe.")
+            else:
+                try:
+                    create_user(nuevo_username, nueva_password)
+                    st.success(f"Usuario '{nuevo_username}' creado correctamente.")
+                except Exception as e:
+                    st.error(f"Error al crear usuario: {e}")
+
+    # ── Lista de usuarios ────────────────────────────────────────────────────
+    st.subheader("Usuarios registrados")
+    usuarios = list_users()
+    if usuarios:
+        usuarios_df = pd.DataFrame(usuarios)
+        usuarios_df["created_at"] = pd.to_datetime(
+            usuarios_df["created_at"]
+        ).dt.strftime("%Y-%m-%d %H:%M")
+        usuarios_df.columns = ["ID", "Usuario", "Fecha de creacion"]
+        st.dataframe(usuarios_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No hay usuarios registrados.")
+
 
 def _render_login_page() -> None:
     """Muestra el formulario de login. Si las credenciales son válidas,
@@ -1513,19 +1562,21 @@ def _render_login_page() -> None:
                 st.error("Por favor ingresa usuario y contrasena.")
             else:
                 with st.spinner("Verificando credenciales..."):
-                    ok = verify_login(username, password)
-                if ok:
+                    user_id = verify_login(username, password)
+                if user_id is not None:
                     st.session_state["authenticated"] = True
                     st.session_state["username"] = username.strip()
+                    st.session_state["user_id"] = user_id
                     st.rerun()
                 else:
                     st.error("Usuario o contrasena incorrectos.")
 
 
 if __name__ == "__main__":
-    # Inicializar tabla de usuarios en Neon (no-op si ya existe)
+    # Inicializar tablas y agregar columna user_id si es necesario
     try:
         init_db()
+        add_user_id_columns()
     except Exception as _db_err:
         st.error(f"No se pudo conectar a la base de datos: {_db_err}")
         st.stop()

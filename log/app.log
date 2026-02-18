@@ -290,3 +290,145 @@ NameError: name 'time' is not defined
 2026-02-18 15:50:45,147 INFO END init_db elapsed=1.152800s
 2026-02-18 15:50:45,147 INFO START main()
 2026-02-18 15:50:45,326 INFO END main elapsed=0.178060s
+2026-02-18 15:59:25,183 INFO START init_db()
+2026-02-18 15:59:26,793 INFO END init_db elapsed=1.608424s
+2026-02-18 15:59:26,793 INFO START add_user_id_columns()
+2026-02-18 15:59:28,906 INFO END add_user_id_columns elapsed=2.115421s
+2026-02-18 15:59:28,906 INFO START verify_login('admin', 'admin123')
+2026-02-18 15:59:30,325 INFO END verify_login elapsed=1.415164s
+2026-02-18 15:59:30,325 INFO START load_data(1)
+2026-02-18 15:59:34,729 INFO END load_data elapsed=4.403457s
+2026-02-18 15:59:34,730 INFO START save_data(<dict>, 1)
+2026-02-18 15:59:39,582 INFO END save_data elapsed=4.857891s
+2026-02-18 15:59:39,582 INFO START load_data(1)
+2026-02-18 15:59:43,984 INFO END load_data elapsed=4.396013s
+2026-02-18 16:00:53,836 INFO START init_db()
+2026-02-18 16:00:54,995 INFO END init_db elapsed=1.172595s
+2026-02-18 16:00:54,995 INFO START add_user_id_columns()
+2026-02-18 16:00:57,075 INFO END add_user_id_columns elapsed=2.064596s
+2026-02-18 16:01:12,725 INFO START init_db()
+2026-02-18 16:01:13,884 INFO END init_db elapsed=1.152898s
+2026-02-18 16:01:13,884 INFO START add_user_id_columns()
+2026-02-18 16:01:15,931 INFO END add_user_id_columns elapsed=2.059376s
+2026-02-18 16:01:15,947 INFO START verify_login('admin', 'admin123')
+2026-02-18 16:01:17,325 INFO END verify_login elapsed=1.377778s
+2026-02-18 16:01:17,375 INFO START init_db()
+2026-02-18 16:01:18,537 INFO END init_db elapsed=1.158228s
+2026-02-18 16:01:18,538 INFO START add_user_id_columns()
+2026-02-18 16:01:19,900 INFO START init_db()
+2026-02-18 16:01:20,581 INFO END add_user_id_columns elapsed=2.043116s
+2026-02-18 16:01:21,058 INFO END init_db elapsed=1.160562s
+2026-02-18 16:01:21,058 INFO START add_user_id_columns()
+2026-02-18 16:01:23,107 INFO END add_user_id_columns elapsed=2.044357s
+2026-02-18 16:01:23,107 INFO START main()
+2026-02-18 16:01:23,111 INFO START _load_data(1)
+2026-02-18 16:01:23,111 INFO START load_data(1)
+2026-02-18 16:01:27,550 INFO END load_data elapsed=4.440289s
+2026-02-18 16:01:27,550 INFO END _load_data elapsed=4.441215s
+2026-02-18 16:01:27,744 INFO END main elapsed=4.636408s
+2026-02-18 16:02:23,114 INFO START init_db()
+2026-02-18 16:02:24,268 INFO END init_db elapsed=1.154081s
+2026-02-18 16:02:24,269 INFO START add_user_id_columns()
+2026-02-18 16:02:26,311 INFO END add_user_id_columns elapsed=2.044504s
+2026-02-18 16:02:26,311 INFO START main()
+2026-02-18 16:02:27,491 INFO END main elapsed=1.176297s
+2026-02-18 16:02:41,353 INFO START init_db()
+2026-02-18 16:02:42,512 INFO END init_db elapsed=1.164090s
+2026-02-18 16:02:42,512 INFO START add_user_id_columns()
+2026-02-18 16:02:44,561 INFO END add_user_id_columns elapsed=2.047742s
+2026-02-18 16:02:44,561 INFO START main()
+2026-02-18 16:02:45,747 INFO END main elapsed=1.188044s
+2026-02-18 16:02:50,990 INFO START init_db()
+2026-02-18 16:02:52,147 INFO END init_db elapsed=1.158948s
+2026-02-18 16:02:52,147 INFO START add_user_id_columns()
+2026-02-18 16:02:54,200 INFO END add_user_id_columns elapsed=2.051821s
+2026-02-18 16:02:54,200 INFO START main()
+2026-02-18 16:02:55,377 INFO START create_user('beto', 'beto123')
+2026-02-18 16:02:56,795 INFO END create_user elapsed=1.427165s
+2026-02-18 16:02:57,969 INFO END main elapsed=3.768096s
+2026-02-18 16:03:01,372 INFO START init_db()
+2026-02-18 16:03:02,520 INFO END init_db elapsed=1.152122s
+2026-02-18 16:03:02,520 INFO START add_user_id_columns()
+2026-02-18 16:03:04,576 INFO END add_user_id_columns elapsed=2.062805s
+2026-02-18 16:03:04,576 INFO START main()
+2026-02-18 16:03:04,576 INFO END main elapsed=0.001531s
+2026-02-18 16:03:04,635 INFO START init_db()
+2026-02-18 16:03:05,794 INFO END init_db elapsed=1.158844s
+2026-02-18 16:03:05,794 INFO START add_user_id_columns()
+2026-02-18 16:03:07,862 INFO END add_user_id_columns elapsed=2.066390s
+2026-02-18 16:03:15,695 INFO START init_db()
+2026-02-18 16:03:16,852 INFO END init_db elapsed=1.162376s
+2026-02-18 16:03:16,852 INFO START add_user_id_columns()
+2026-02-18 16:03:18,901 INFO END add_user_id_columns elapsed=2.055777s
+2026-02-18 16:03:18,916 INFO START verify_login('beto', 'beto123')
+2026-02-18 16:03:20,294 INFO END verify_login elapsed=1.381074s
+2026-02-18 16:03:20,352 INFO START init_db()
+2026-02-18 16:03:21,511 INFO END init_db elapsed=1.161367s
+2026-02-18 16:03:21,511 INFO START add_user_id_columns()
+2026-02-18 16:03:23,583 INFO END add_user_id_columns elapsed=2.067457s
+2026-02-18 16:03:23,583 INFO START main()
+2026-02-18 16:03:23,583 INFO START _load_data(2)
+2026-02-18 16:03:23,583 INFO START load_data(2)
+2026-02-18 16:03:27,577 INFO END load_data elapsed=3.993540s
+2026-02-18 16:03:27,577 INFO END _load_data elapsed=3.994383s
+2026-02-18 16:03:27,594 INFO END main elapsed=4.011634s
+2026-02-18 16:03:32,203 INFO START init_db()
+2026-02-18 16:03:33,378 INFO END init_db elapsed=1.171823s
+2026-02-18 16:03:33,378 INFO START add_user_id_columns()
+2026-02-18 16:03:35,433 INFO END add_user_id_columns elapsed=2.062387s
+2026-02-18 16:03:35,433 INFO START main()
+2026-02-18 16:03:36,619 INFO END main elapsed=1.174156s
+2026-02-18 16:05:11,036 INFO START init_db()
+2026-02-18 16:05:12,254 INFO END init_db elapsed=1.224036s
+2026-02-18 16:05:12,254 INFO START add_user_id_columns()
+2026-02-18 16:05:14,305 INFO END add_user_id_columns elapsed=2.038900s
+2026-02-18 16:05:20,624 INFO START init_db()
+2026-02-18 16:05:21,771 INFO END init_db elapsed=1.147347s
+2026-02-18 16:05:21,771 INFO START add_user_id_columns()
+2026-02-18 16:05:23,811 INFO END add_user_id_columns elapsed=2.035824s
+2026-02-18 16:05:23,813 INFO START verify_login('beto', 'beto123')
+2026-02-18 16:05:25,188 INFO END verify_login elapsed=1.372121s
+2026-02-18 16:05:25,238 INFO START init_db()
+2026-02-18 16:05:26,389 INFO END init_db elapsed=1.152988s
+2026-02-18 16:05:26,389 INFO START add_user_id_columns()
+2026-02-18 16:05:28,437 INFO END add_user_id_columns elapsed=2.051501s
+2026-02-18 16:05:28,437 INFO START main()
+2026-02-18 16:05:28,461 INFO END main elapsed=0.014910s
+2026-02-18 16:05:59,456 INFO START init_db()
+2026-02-18 16:06:00,614 INFO END init_db elapsed=1.163201s
+2026-02-18 16:06:00,614 INFO START add_user_id_columns()
+2026-02-18 16:06:02,666 INFO END add_user_id_columns elapsed=2.053090s
+2026-02-18 16:06:02,666 INFO START main()
+2026-02-18 16:06:02,666 INFO END main elapsed=0.001607s
+2026-02-18 16:06:02,724 INFO START init_db()
+2026-02-18 16:06:03,880 INFO END init_db elapsed=1.145813s
+2026-02-18 16:06:03,880 INFO START add_user_id_columns()
+2026-02-18 16:06:05,927 INFO END add_user_id_columns elapsed=2.041291s
+2026-02-18 16:06:10,743 INFO START init_db()
+2026-02-18 16:06:11,905 INFO END init_db elapsed=1.151260s
+2026-02-18 16:06:11,905 INFO START add_user_id_columns()
+2026-02-18 16:06:13,938 INFO END add_user_id_columns elapsed=2.040759s
+2026-02-18 16:06:13,953 INFO START verify_login('admin', 'admin123')
+2026-02-18 16:06:15,323 INFO END verify_login elapsed=1.369908s
+2026-02-18 16:06:15,372 INFO START init_db()
+2026-02-18 16:06:16,522 INFO END init_db elapsed=1.149715s
+2026-02-18 16:06:16,522 INFO START add_user_id_columns()
+2026-02-18 16:06:18,553 INFO END add_user_id_columns elapsed=2.029212s
+2026-02-18 16:06:18,553 INFO START main()
+2026-02-18 16:06:18,698 INFO END main elapsed=0.140964s
+2026-02-18 16:07:57,401 INFO START init_db()
+2026-02-18 16:07:58,557 INFO END init_db elapsed=1.153815s
+2026-02-18 16:07:58,557 INFO START add_user_id_columns()
+2026-02-18 16:08:00,584 INFO END add_user_id_columns elapsed=2.029412s
+2026-02-18 16:08:05,741 INFO START init_db()
+2026-02-18 16:08:06,891 INFO END init_db elapsed=1.151985s
+2026-02-18 16:08:06,891 INFO START add_user_id_columns()
+2026-02-18 16:08:08,942 INFO END add_user_id_columns elapsed=2.043756s
+2026-02-18 16:08:08,942 INFO START verify_login('admin', 'admin123')
+2026-02-18 16:08:10,325 INFO END verify_login elapsed=1.378990s
+2026-02-18 16:08:10,375 INFO START init_db()
+2026-02-18 16:08:11,516 INFO END init_db elapsed=1.144985s
+2026-02-18 16:08:11,516 INFO START add_user_id_columns()
+2026-02-18 16:08:13,562 INFO END add_user_id_columns elapsed=2.038958s
+2026-02-18 16:08:13,562 INFO START main()
+2026-02-18 16:08:13,709 INFO END main elapsed=0.144434s

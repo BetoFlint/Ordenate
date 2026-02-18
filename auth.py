@@ -2,9 +2,10 @@
 auth.py – Lógica de autenticación contra la tabla 'users' en Neon.
 
 Funciones públicas:
-  - verify_login(username, password)  → bool
+  - verify_login(username, password)  → int | None  (user_id si OK, None si falla)
   - create_user(username, password)   → None
   - user_exists(username)             → bool
+  - list_users()                      → list[dict]  (id, username, created_at)
 """
 
 from __future__ import annotations
@@ -26,22 +27,23 @@ def _check_password(plain: str, hashed: str) -> bool:
 
 
 @log_time
-def verify_login(username: str, password: str) -> bool:
-    """Devuelve True si el usuario existe y la contraseña es correcta."""
-    sql = "SELECT password FROM users WHERE username = %s LIMIT 1;"
+def verify_login(username: str, password: str) -> int | None:
+    """Verifica credenciales y devuelve el user_id si son correctas, None si no."""
+    sql = "SELECT id, password FROM users WHERE username = %s LIMIT 1;"
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, (username.strip(),))
                 row = cur.fetchone()
     except Exception:
-        return False
+        return None
 
     if row is None:
-        return False
+        return None
 
-    stored_hash: str = row[0]
-    return _check_password(password, stored_hash)
+    user_id: int = row[0]
+    stored_hash: str = row[1]
+    return user_id if _check_password(password, stored_hash) else None
 
 
 @log_time
@@ -68,3 +70,16 @@ def user_exists(username: str) -> bool:
                 return cur.fetchone() is not None
     except Exception:
         return False
+
+
+def list_users() -> list[dict]:
+    """Devuelve todos los usuarios (id, username, created_at), sin contraseñas."""
+    sql = "SELECT id, username, created_at FROM users ORDER BY id;"
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                rows = cur.fetchall()
+        return [{"id": r[0], "username": r[1], "created_at": r[2]} for r in rows]
+    except Exception:
+        return []

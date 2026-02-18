@@ -2,8 +2,9 @@
 db.py – Conexión a la base de datos Neon (PostgreSQL).
 
 Provee:
-  - get_connection()  → devuelve una conexión psycopg2 lista para usar
-  - init_db()         → crea la tabla 'users' si no existe (ejecutar una vez al iniciar)
+  - get_connection()        → devuelve una conexión psycopg2 lista para usar
+  - init_db()               → crea la tabla 'users' si no existe
+  - add_user_id_columns()   → añade user_id a las tablas de datos si no existe
 """
 
 from __future__ import annotations
@@ -32,14 +33,7 @@ def get_connection() -> psycopg2.extensions.connection:
 
 @log_time
 def init_db() -> None:
-    """Crea la tabla 'users' en Neon si aún no existe.
-
-    Esquema:
-        id        SERIAL PRIMARY KEY
-        username  TEXT UNIQUE NOT NULL
-        password  TEXT NOT NULL          -- bcrypt hash
-        created_at TIMESTAMPTZ DEFAULT now()
-    """
+    """Crea la tabla 'users' en Neon si aún no existe."""
     ddl = """
         CREATE TABLE IF NOT EXISTS users (
             id         SERIAL PRIMARY KEY,
@@ -51,4 +45,31 @@ def init_db() -> None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(ddl)
+        conn.commit()
+
+
+@log_time
+def add_user_id_columns() -> None:
+    """Añade la columna user_id a las tablas de datos si aún no existe.
+
+    - gastos, ingresos, cuenta, comentarios reciben user_id directo.
+    - pagos, gastos_mensuales, ingresos_mensuales heredan el filtro via FK.
+    Los registros existentes sin user_id quedan asignados al usuario id=1 (admin).
+    """
+    statements = [
+        # Añadir columna si no existe (idempotente)
+        "ALTER TABLE gastos     ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
+        "ALTER TABLE ingresos   ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
+        "ALTER TABLE cuenta     ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
+        "ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
+        # Asignar registros huérfanos al primer usuario (admin)
+        "UPDATE gastos      SET user_id = 1 WHERE user_id IS NULL;",
+        "UPDATE ingresos    SET user_id = 1 WHERE user_id IS NULL;",
+        "UPDATE cuenta      SET user_id = 1 WHERE user_id IS NULL;",
+        "UPDATE comentarios SET user_id = 1 WHERE user_id IS NULL;",
+    ]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for stmt in statements:
+                cur.execute(stmt)
         conn.commit()

@@ -82,52 +82,54 @@ def _to_str(val) -> str | None:
 # ── LOAD ────────────────────────────────────────────────────────────────────
 
 @log_time
-def load_data() -> dict:
-    """Lee todas las tablas de Neon y las devuelve como DataFrames.
-
-    El dict resultante tiene las mismas claves y estructura de columnas
-    que el antiguo presupuesto.xlsx.
-    """
+def load_data(user_id: int) -> dict:
+    """Lee las tablas de Neon filtradas por user_id y las devuelve como DataFrames."""
     engine = _get_engine()
+    uid = int(user_id)
     with engine.connect() as conn:
         gastos = pd.read_sql(
             "SELECT gasto_id, nombre, categoria, monto_presupuestado, "
             "       periodicidad, fecha_pago, fecha_inicio, fecha_termino "
-            "FROM gastos ORDER BY gasto_id",
-            conn,
+            "FROM gastos WHERE user_id = %(uid)s ORDER BY gasto_id",
+            conn, params={"uid": uid},
         )
         pagos = pd.read_sql(
-            "SELECT pago_id, gasto_id, monto_real, fecha_pago_real, estado "
-            "FROM pagos ORDER BY pago_id",
-            conn,
+            "SELECT p.pago_id, p.gasto_id, p.monto_real, p.fecha_pago_real, p.estado "
+            "FROM pagos p "
+            "JOIN gastos g ON p.gasto_id = g.gasto_id "
+            "WHERE g.user_id = %(uid)s ORDER BY p.pago_id",
+            conn, params={"uid": uid},
         )
         ingresos = pd.read_sql(
             "SELECT ingreso_id, nombre, monto, periodicidad, "
             "       fecha_pago, fecha_inicio, fecha_termino "
-            "FROM ingresos ORDER BY ingreso_id",
-            conn,
+            "FROM ingresos WHERE user_id = %(uid)s ORDER BY ingreso_id",
+            conn, params={"uid": uid},
         )
         cuenta = pd.read_sql(
-            "SELECT saldo_actual FROM cuenta LIMIT 1",
-            conn,
+            "SELECT saldo_actual FROM cuenta WHERE user_id = %(uid)s LIMIT 1",
+            conn, params={"uid": uid},
         )
         gastos_mensuales = pd.read_sql(
-            "SELECT gasto_id, year, month, monto_presupuestado "
-            "FROM gastos_mensuales ORDER BY gasto_id, year, month",
-            conn,
+            "SELECT gm.gasto_id, gm.year, gm.month, gm.monto_presupuestado "
+            "FROM gastos_mensuales gm "
+            "JOIN gastos g ON gm.gasto_id = g.gasto_id "
+            "WHERE g.user_id = %(uid)s ORDER BY gm.gasto_id, gm.year, gm.month",
+            conn, params={"uid": uid},
         )
         ingresos_mensuales = pd.read_sql(
-            "SELECT ingreso_id, year, month, monto "
-            "FROM ingresos_mensuales ORDER BY ingreso_id, year, month",
-            conn,
+            "SELECT im.ingreso_id, im.year, im.month, im.monto "
+            "FROM ingresos_mensuales im "
+            "JOIN ingresos i ON im.ingreso_id = i.ingreso_id "
+            "WHERE i.user_id = %(uid)s ORDER BY im.ingreso_id, im.year, im.month",
+            conn, params={"uid": uid},
         )
         comentarios = pd.read_sql(
-            "SELECT comentario FROM comentarios",
-            conn,
+            "SELECT comentario FROM comentarios WHERE user_id = %(uid)s",
+            conn, params={"uid": uid},
         )
 
-    # Asegurar tipos correctos en columnas de id para evitar problemas de
-    # comparación int64 vs object más adelante en la app.
+    # Asegurar tipos int en columnas de id
     for df, col in [
         (gastos, "gasto_id"),
         (pagos, "pago_id"),
@@ -138,6 +140,10 @@ def load_data() -> dict:
     ]:
         if col in df.columns:
             df[col] = df[col].astype("Int64")
+
+    # Si cuenta está vacía, inicializarla con saldo 0
+    if cuenta.empty:
+        cuenta = pd.DataFrame({"saldo_actual": [0]})
 
     return {
         "gastos": gastos,
@@ -153,12 +159,13 @@ def load_data() -> dict:
 # ── SAVE ────────────────────────────────────────────────────────────────────
 
 @log_time
-def save_data(data: dict) -> None:
-    """Sincroniza el dict de DataFrames hacia Neon en una única transacción.
+def save_data(data: dict, user_id: int) -> None:
+    """Sincroniza el dict de DataFrames hacia Neon para el user_id dado.
 
-    Estrategia: DELETE todas las filas de cada tabla (en orden que respeta FK)
-    y luego INSERT el estado completo desde los DataFrames.
+    Estrategia: DELETE WHERE user_id = X (en orden hijo→padre)
+    y luego INSERT con user_id incluido (en orden padre→hijo).
     """
+    uid = int(user_id)
     gastos_df             = data.get("gastos",             pd.DataFrame())
     pagos_df              = data.get("pagos",              pd.DataFrame())
     ingresos_df           = data.get("ingresos",           pd.DataFrame())
@@ -172,18 +179,28 @@ def save_data(data: dict) -> None:
     cur = conn.cursor()
 
     try:
-        # 1. Borrar en orden hijo → padre
-        cur.execute("""
-            DELETE FROM comentarios;
-            DELETE FROM ingresos_mensuales;
-            DELETE FROM gastos_mensuales;
-            DELETE FROM cuenta;
-            DELETE FROM pagos;
-            DELETE FROM ingresos;
-            DELETE FROM gastos;
-        """)
+        # 1. Borrar solo los datos del usuario (orden hijo → padre)
+        cur.execute("DELETE FROM comentarios WHERE user_id = %s;", (uid,))
+        cur.execute(
+            "DELETE FROM ingresos_mensuales im "
+            "USING ingresos i WHERE im.ingreso_id = i.ingreso_id AND i.user_id = %s;",
+            (uid,),
+        )
+        cur.execute(
+            "DELETE FROM gastos_mensuales gm "
+            "USING gastos g WHERE gm.gasto_id = g.gasto_id AND g.user_id = %s;",
+            (uid,),
+        )
+        cur.execute("DELETE FROM cuenta WHERE user_id = %s;", (uid,))
+        cur.execute(
+            "DELETE FROM pagos p "
+            "USING gastos g WHERE p.gasto_id = g.gasto_id AND g.user_id = %s;",
+            (uid,),
+        )
+        cur.execute("DELETE FROM ingresos WHERE user_id = %s;", (uid,))
+        cur.execute("DELETE FROM gastos WHERE user_id = %s;", (uid,))
 
-        # 2. Insertar en orden padre → hijo
+        # 2. Insertar con user_id (orden padre → hijo)
 
         # gastos
         if not gastos_df.empty:
@@ -197,13 +214,14 @@ def save_data(data: dict) -> None:
                     _to_int(r.get("fecha_pago")),
                     _to_pg_date(r.get("fecha_inicio")),
                     _to_pg_date(r.get("fecha_termino")),
+                    uid,
                 )
                 for _, r in gastos_df.iterrows()
             ]
             psycopg2.extras.execute_values(cur, """
                 INSERT INTO gastos
                     (gasto_id, nombre, categoria, monto_presupuestado,
-                     periodicidad, fecha_pago, fecha_inicio, fecha_termino)
+                     periodicidad, fecha_pago, fecha_inicio, fecha_termino, user_id)
                 VALUES %s;
             """, gastos_rows)
             cur.execute(
@@ -222,13 +240,14 @@ def save_data(data: dict) -> None:
                     _to_int(r.get("fecha_pago")),
                     _to_pg_date(r.get("fecha_inicio")),
                     _to_pg_date(r.get("fecha_termino")),
+                    uid,
                 )
                 for _, r in ingresos_df.iterrows()
             ]
             psycopg2.extras.execute_values(cur, """
                 INSERT INTO ingresos
                     (ingreso_id, nombre, monto, periodicidad,
-                     fecha_pago, fecha_inicio, fecha_termino)
+                     fecha_pago, fecha_inicio, fecha_termino, user_id)
                 VALUES %s;
             """, ingresos_rows)
             cur.execute(
@@ -236,7 +255,7 @@ def save_data(data: dict) -> None:
                 "(SELECT COALESCE(MAX(ingreso_id), 0) FROM ingresos));"
             )
 
-        # pagos
+        # pagos (sin user_id propio, hereda via gasto_id → gastos.user_id)
         if not pagos_df.empty:
             pagos_rows = [
                 (
@@ -260,9 +279,9 @@ def save_data(data: dict) -> None:
         # cuenta
         if not cuenta_df.empty:
             saldo = _to_float(cuenta_df.iloc[0]["saldo_actual"])
-            cur.execute("INSERT INTO cuenta (saldo_actual) VALUES (%s);", (saldo,))
+            cur.execute("INSERT INTO cuenta (saldo_actual, user_id) VALUES (%s, %s);", (saldo, uid))
 
-        # gastos_mensuales
+        # gastos_mensuales (sin user_id propio, hereda via gasto_id → gastos.user_id)
         if not gastos_mensuales_df.empty:
             gm_rows = [
                 (
@@ -278,7 +297,7 @@ def save_data(data: dict) -> None:
                 VALUES %s;
             """, gm_rows)
 
-        # ingresos_mensuales
+        # ingresos_mensuales (sin user_id propio, hereda via ingreso_id → ingresos.user_id)
         if not ingresos_mensuales_df.empty:
             im_rows = [
                 (
@@ -297,13 +316,13 @@ def save_data(data: dict) -> None:
         # comentarios
         if not comentarios_df.empty:
             com_rows = [
-                (_to_str(r.get("comentario")),)
+                (_to_str(r.get("comentario")), uid)
                 for _, r in comentarios_df.iterrows()
                 if _to_str(r.get("comentario")) is not None
             ]
             if com_rows:
                 psycopg2.extras.execute_values(cur, """
-                    INSERT INTO comentarios (comentario) VALUES %s;
+                    INSERT INTO comentarios (comentario, user_id) VALUES %s;
                 """, com_rows)
 
         conn.commit()
