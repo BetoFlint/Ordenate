@@ -1,11 +1,10 @@
 import calendar
-import os
-import zipfile
 from datetime import date, datetime
 
 from logger import log_time
 from db import init_db
 from auth import verify_login
+from neon_data import load_data as _neon_load_data, save_data as _neon_save_data
 
 import altair as alt
 import pandas as pd
@@ -29,7 +28,6 @@ except Exception:
     _AGGRID_VERSION = None
 
 
-DATA_FILE = "presupuesto.xlsx"
 CATEGORIAS = [
     "Hogar",
     "Telefonia",
@@ -41,52 +39,6 @@ CATEGORIAS = [
     "Ocio",
 ]
 
-
-def _write_empty_data_file(path: str) -> None:
-    gastos_mensuales = _empty_gastos_mensuales_df()
-    ingresos_mensuales = _empty_ingresos_mensuales_df()
-    comentarios = _empty_comentarios_df()
-    gastos = pd.DataFrame(
-        columns=[
-            "gasto_id",
-            "nombre",
-            "categoria",
-            "monto_presupuestado",
-            "periodicidad",
-            "fecha_pago",
-            "fecha_inicio",
-            "fecha_termino",
-        ]
-    )
-    pagos = pd.DataFrame(
-        columns=[
-            "pago_id",
-            "gasto_id",
-            "monto_real",
-            "fecha_pago_real",
-            "estado",
-        ]
-    )
-    ingresos = pd.DataFrame(
-        columns=[
-            "ingreso_id",
-            "nombre",
-            "monto",
-            "periodicidad",
-            "fecha_pago",
-            "fecha_inicio",
-            "fecha_termino",
-        ]
-    )
-    cuenta = pd.DataFrame(columns=["saldo_actual"])
-    with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        gastos.to_excel(writer, sheet_name="gastos", index=False)
-        pagos.to_excel(writer, sheet_name="pagos", index=False)
-        ingresos.to_excel(writer, sheet_name="ingresos", index=False)
-        cuenta.to_excel(writer, sheet_name="cuenta", index=False)
-        gastos_mensuales.to_excel(writer, sheet_name="gastos_mensuales", index=False)
-        ingresos_mensuales.to_excel(writer, sheet_name="ingresos_mensuales", index=False)
-        comentarios.to_excel(writer, sheet_name="comentarios", index=False)
 
 
 def _empty_gastos_mensuales_df() -> pd.DataFrame:
@@ -115,117 +67,18 @@ def _empty_comentarios_df() -> pd.DataFrame:
     return pd.DataFrame(columns=["comentario"])
 
 
-@log_time
-def _read_data_file(path: str) -> dict:
-    data = {
-        "gastos": pd.read_excel(path, sheet_name="gastos"),
-        "pagos": pd.read_excel(path, sheet_name="pagos"),
-        "ingresos": pd.read_excel(path, sheet_name="ingresos"),
-        "cuenta": pd.read_excel(path, sheet_name="cuenta"),
-    }
-    try:
-        gastos_mensuales = pd.read_excel(path, sheet_name="gastos_mensuales")
-    except ValueError:
-        gastos_mensuales = _empty_gastos_mensuales_df()
-    try:
-        legacy_ajustes = pd.read_excel(path, sheet_name="ajustes")
-    except ValueError:
-        legacy_ajustes = _empty_gastos_mensuales_df()
-
-    if not legacy_ajustes.empty:
-        merged = gastos_mensuales.copy()
-        if merged.empty:
-            merged = _empty_gastos_mensuales_df()
-        existing_keys = set(
-            zip(
-                merged["gasto_id"].astype(int),
-                merged["year"].astype(int),
-                merged["month"].astype(int),
-            )
-        )
-        to_add = []
-        for _, row in legacy_ajustes.iterrows():
-            key = (int(row["gasto_id"]), int(row["year"]), int(row["month"]))
-            if key in existing_keys:
-                continue
-            to_add.append(
-                {
-                    "gasto_id": int(row["gasto_id"]),
-                    "year": int(row["year"]),
-                    "month": int(row["month"]),
-                    "monto_presupuestado": float(row["monto_presupuestado"])
-                    if not pd.isna(row["monto_presupuestado"])
-                    else 0.0,
-                }
-            )
-        if to_add:
-            gastos_mensuales = pd.concat([merged, pd.DataFrame(to_add)], ignore_index=True)
-        else:
-            gastos_mensuales = merged
-
-    data["gastos_mensuales"] = gastos_mensuales
-    try:
-        ingresos_mensuales = pd.read_excel(path, sheet_name="ingresos_mensuales")
-    except ValueError:
-        ingresos_mensuales = _empty_ingresos_mensuales_df()
-    data["ingresos_mensuales"] = ingresos_mensuales
-    try:
-        comentarios = pd.read_excel(path, sheet_name="comentarios")
-    except ValueError:
-        comentarios = _empty_comentarios_df()
-    data["comentarios"] = comentarios
-    return data
-
-
-def _ensure_data_file(path: str) -> None:
-    if os.path.exists(path):
-        return
-    _write_empty_data_file(path)
-
-
 @st.cache_data
 @log_time
-def _load_data(path: str) -> dict:
-    _ensure_data_file(path)
-    try:
-        return _read_data_file(path)
-    except zipfile.BadZipFile:
-        backup_path = f"{path}.bak"
-        if os.path.exists(path) and not os.path.exists(backup_path):
-            try:
-                os.replace(path, backup_path)
-            except PermissionError:
-                st.error(
-                    "El archivo presupuesto.xlsx esta abierto o bloqueado. "
-                    "Cierralo y vuelve a intentar."
-                )
-                st.stop()
-        try:
-            _write_empty_data_file(path)
-            return _read_data_file(path)
-        except Exception:
-            st.error(
-                "No se pudo recrear presupuesto.xlsx. Cierralo si esta abierto "
-                "y elimina el archivo para regenerarlo."
-            )
-            st.stop()
+def _load_data() -> dict:
+    """Carga todos los datos desde Neon. Cacheado por Streamlit."""
+    return _neon_load_data()
 
 
 @log_time
-def _save_data(path: str, data: dict) -> None:
-    temp_path = f"{path}.tmp.xlsx"
-    gastos_mensuales_df = data.get("gastos_mensuales", _empty_gastos_mensuales_df())
-    ingresos_mensuales_df = data.get("ingresos_mensuales", _empty_ingresos_mensuales_df())
-    comentarios_df = data.get("comentarios", _empty_comentarios_df())
-    with pd.ExcelWriter(temp_path, engine="openpyxl") as writer:
-        data["gastos"].to_excel(writer, sheet_name="gastos", index=False)
-        data["pagos"].to_excel(writer, sheet_name="pagos", index=False)
-        data["ingresos"].to_excel(writer, sheet_name="ingresos", index=False)
-        data["cuenta"].to_excel(writer, sheet_name="cuenta", index=False)
-        gastos_mensuales_df.to_excel(writer, sheet_name="gastos_mensuales", index=False)
-        ingresos_mensuales_df.to_excel(writer, sheet_name="ingresos_mensuales", index=False)
-        comentarios_df.to_excel(writer, sheet_name="comentarios", index=False)
-    os.replace(temp_path, path)
+def _save_data(data: dict) -> None:
+    """Persiste el dict de datos en Neon y limpia el cache para la próxima carga."""
+    _neon_save_data(data)
+    st.cache_data.clear()
 
 
 def _next_id(series: pd.Series) -> int:
@@ -835,7 +688,7 @@ def main() -> None:
         aggrid_status = "No disponible"
     st.sidebar.info(f"AgGrid: {aggrid_status}  {'v' + _AGGRID_VERSION if _AGGRID_AVAILABLE and _AGGRID_VERSION else ''}")
 
-    data = _load_data(DATA_FILE)
+    data = _load_data()
     gastos_df = data["gastos"].copy()
     pagos_df = data["pagos"].copy()
     ingresos_df = data["ingresos"].copy()
@@ -852,7 +705,7 @@ def main() -> None:
     if did_migrate:
         data["gastos_mensuales"] = gastos_mensuales_df
         data["ingresos_mensuales"] = ingresos_mensuales_df
-        _save_data(DATA_FILE, data)
+        _save_data(data)
 
     menu = st.sidebar.radio(
         "Menu",
@@ -911,7 +764,7 @@ def main() -> None:
                         new_row,
                     )
                     data["gastos_mensuales"] = gastos_mensuales_df
-                    _save_data(DATA_FILE, data)
+                    _save_data(data)
                     st.success("Gasto registrado.")
 
         st.subheader("Registrar ingreso")
@@ -957,7 +810,7 @@ def main() -> None:
                         new_ingreso,
                     )
                     data["ingresos_mensuales"] = ingresos_mensuales_df
-                    _save_data(DATA_FILE, data)
+                    _save_data(data)
                     st.success("Ingreso registrado.")
 
         current_year, current_month = _current_month()
@@ -1035,7 +888,7 @@ def main() -> None:
                         data["gastos"] = gastos_df
                         data["pagos"] = pagos_df
                         data["gastos_mensuales"] = gastos_mensuales_df
-                        _save_data(DATA_FILE, data)
+                        _save_data(data)
                         st.success("Gastos eliminados.")
                         st.rerun()
                 if st.button("Guardar montos del anio"):
@@ -1065,7 +918,7 @@ def main() -> None:
                     if gastos_mensuales_df.empty:
                         gastos_mensuales_df = _empty_gastos_mensuales_df()
                     data["gastos_mensuales"] = gastos_mensuales_df
-                    _save_data(DATA_FILE, data)
+                    _save_data(data)
                     refreshed_table = _build_gastos_por_mes_table(
                         gastos_df,
                         selected_year,
@@ -1133,7 +986,7 @@ def main() -> None:
                     if ingresos_mensuales_df.empty:
                         ingresos_mensuales_df = _empty_ingresos_mensuales_df()
                     data["ingresos_mensuales"] = ingresos_mensuales_df
-                    _save_data(DATA_FILE, data)
+                    _save_data(data)
                     refreshed_table = _build_ingresos_por_mes_table(
                         ingresos_df,
                         selected_year,
@@ -1329,7 +1182,7 @@ def main() -> None:
                                 [pagos_df, pd.DataFrame(new_rows)], ignore_index=True
                             )
                             data["pagos"] = pagos_df
-                            _save_data(DATA_FILE, data)
+                            _save_data(data)
                             st.success("Pagos registrados.")
 
                         if skipped:
@@ -1520,7 +1373,7 @@ def main() -> None:
                 [{"comentario": comentario_input.strip()}]
             )
             data["comentarios"] = comentarios_df
-            _save_data(DATA_FILE, data)
+            _save_data(data)
             st.success("Comentario guardado.")
 
     if menu == "Balance":
@@ -1535,7 +1388,7 @@ def main() -> None:
         if st.button("Guardar saldo"):
             cuenta_df = _set_saldo(cuenta_df, float(saldo_input))
             data["cuenta"] = cuenta_df
-            _save_data(DATA_FILE, data)
+            _save_data(data)
             st.success("Saldo actualizado.")
 
         year, month = _current_month()
