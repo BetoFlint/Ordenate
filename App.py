@@ -4,6 +4,8 @@ import zipfile
 from datetime import date, datetime
 
 from logger import log_time
+from db import init_db
+from auth import verify_login
 
 import altair as alt
 import pandas as pd
@@ -815,6 +817,17 @@ def _build_ingresos_por_mes_table(
 def main() -> None:
     st.set_page_config(page_title="Presupuesto Familiar", layout="wide")
     st.title("Presupuesto familiar")
+
+    # --- Sidebar: usuario y logout ---
+    username = st.session_state.get("username", "")
+    if username:
+        st.sidebar.markdown(f"**Usuario:** {username}")
+    if st.sidebar.button("Cerrar sesion", use_container_width=True):
+        st.session_state["authenticated"] = False
+        st.session_state["username"] = ""
+        st.rerun()
+    st.sidebar.divider()
+
     # Mostrar estado de AgGrid para facilitar debugging
     try:
         aggrid_status = "Disponible" if _AGGRID_AVAILABLE else "No disponible"
@@ -1630,5 +1643,42 @@ def main() -> None:
             st.info("No hay gastos pendientes este mes.")
 
 
+def _render_login_page() -> None:
+    """Muestra el formulario de login. Si las credenciales son válidas,
+    guarda el estado en session_state y hace rerun."""
+    col_center = st.columns([1, 1, 1])[1]  # columna central
+    with col_center:
+        st.title("Ordenate")
+        st.subheader("Iniciar sesion")
+        with st.form(key="login_form"):
+            username = st.text_input("Usuario", placeholder="Ingresa tu usuario")
+            password = st.text_input("Contrasena", type="password", placeholder="Ingresa tu contrasena")
+            submitted = st.form_submit_button("Ingresar", use_container_width=True)
+
+        if submitted:
+            if not username or not password:
+                st.error("Por favor ingresa usuario y contrasena.")
+            else:
+                with st.spinner("Verificando credenciales..."):
+                    ok = verify_login(username, password)
+                if ok:
+                    st.session_state["authenticated"] = True
+                    st.session_state["username"] = username.strip()
+                    st.rerun()
+                else:
+                    st.error("Usuario o contrasena incorrectos.")
+
+
 if __name__ == "__main__":
-    main()
+    # Inicializar tabla de usuarios en Neon (no-op si ya existe)
+    try:
+        init_db()
+    except Exception as _db_err:
+        st.error(f"No se pudo conectar a la base de datos: {_db_err}")
+        st.stop()
+
+    if not st.session_state.get("authenticated", False):
+        st.set_page_config(page_title="Ordenate – Login", layout="centered")
+        _render_login_page()
+    else:
+        main()

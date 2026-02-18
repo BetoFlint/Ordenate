@@ -1,0 +1,14 @@
+# Streamlit secrets (credenciales - NO subir a git)
+.streamlit/secrets.toml
+
+# Logs
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# Data
+*.xlsx
