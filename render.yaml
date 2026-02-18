@@ -2,7 +2,7 @@ services:
   - type: web
     name: ordenate
     runtime: python
-    pythonVersion: "3.11.0"
+    pythonVersion: "3.11.11"
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run App.py
     envVars:
