@@ -677,7 +677,7 @@ def _build_ingresos_por_mes_table(
 
 @log_time
 def main() -> None:
-    st.title("Presupuesto familiar")
+    
 
     # --- user_id desde session_state ---
     user_id: int = st.session_state.get("user_id", 1)
@@ -694,12 +694,7 @@ def main() -> None:
         st.rerun()
     st.sidebar.divider()
 
-    # Mostrar estado de AgGrid para facilitar debugging
-    try:
-        aggrid_status = "Disponible" if _AGGRID_AVAILABLE else "No disponible"
-    except NameError:
-        aggrid_status = "No disponible"
-    st.sidebar.info(f"AgGrid: {aggrid_status}  {'v' + _AGGRID_VERSION if _AGGRID_AVAILABLE and _AGGRID_VERSION else ''}")
+   
 
     data = _load_data(user_id)
     pagos_df = data["pagos"].copy()
@@ -716,7 +711,7 @@ def main() -> None:
         data["ingresos_mensuales"] = ingresos_mensuales_df
         _save_data(data, user_id)
 
-    _menu_opciones = ["Panel de Gastos", "Resumen", "Balance"]
+    _menu_opciones = ["Panel de Gastos", "Resumen"]
     if username == "admin":
         _menu_opciones.append("Usuarios")
 
@@ -726,6 +721,7 @@ def main() -> None:
     )
 
     if menu == "Panel de Gastos":
+        st.title("Panel de Gastos e Ingresos")
         current_year, current_month = _current_month()
         if current_month == 1:
             cierre_year = current_year - 1
@@ -832,7 +828,7 @@ def main() -> None:
                     _save_data(data, user_id)
                     st.success("Ingreso registrado.")
 
-        st.subheader("Gastos presupuestados por mes")
+        st.subheader("Tabla de Gastos Presupuestados")
         if gastos_mensuales_df.empty:
             st.info("No hay gastos registrados.")
         else:
@@ -889,7 +885,7 @@ def main() -> None:
                         _save_data(data, user_id)
                         st.success("Gastos eliminados.")
                         st.rerun()
-                if st.button("Guardar montos del anio"):
+                if st.button("Guardar montos del Año"):
                     new_rows = []
                     for gasto_id, row in editable_ajustes_df.iterrows():
                         for month in range(1, 13):
@@ -936,7 +932,7 @@ def main() -> None:
                 aggrid_df = editable_table.reset_index()
                 _render_aggrid_sum_view(aggrid_df, key="aggrid_gastos_mes")
 
-        st.subheader("Ingresos presupuestados por mes")
+        st.subheader("Tabla de Ingresos Planificados")
         if ingresos_mensuales_df.empty:
             st.info("No hay ingresos registrados.")
         else:
@@ -959,7 +955,7 @@ def main() -> None:
                     disabled=["Ingreso", "Periodicidad"],
                     key="ingresos_mes_editor",
                 )
-                if st.button("Guardar montos de ingresos del anio"):
+                if st.button("Guardar montos de ingresos del Año"):
                     new_rows = []
                     for ingreso_id, row in ingresos_editor_df.iterrows():
                         for month in range(1, 13):
@@ -1004,11 +1000,11 @@ def main() -> None:
                 aggrid_df = ingresos_editable.reset_index()
                 _render_aggrid_sum_view(aggrid_df, key="aggrid_ingresos_mes")
 
-        st.subheader("Registrar pagos del mes desde esta tabla")
-        col_year_pagos, col_month_pagos = st.columns(2)
+        st.subheader("Sección de Pagos")
+        col_year_pagos, col_month_pagos, _ = st.columns([1, 1, 2])
         with col_year_pagos:
             selected_year_pagos = st.selectbox(
-                "Anio",
+                "Año",
                 year_options,
                 index=year_options.index(cierre_year),
                 key="pagos_mes_anio",
@@ -1087,7 +1083,14 @@ def main() -> None:
                 paid_display = _format_amount_columns(
                     paid_df,
                     ["monto_presupuestado", "monto_real"],
-                )
+                ).rename(columns={
+                    "nombre": "Nombre",
+                    "categoria": "Categoría",
+                    "monto_presupuestado": "Monto Presupuestado",
+                    "monto_real": "Monto Real",
+                    "fecha_pago_real": "Fecha Pago Real",
+                    "estado": "Estado",
+                })
                 st.dataframe(paid_display, use_container_width=True)
 
             if unpaid_rows:
@@ -1107,7 +1110,7 @@ def main() -> None:
                     disabled=["nombre", "categoria", "monto_presupuestado"],
                     column_config={
                         "fecha_pago_real": st.column_config.DateColumn(
-                            "Fecha pago",
+                            "Fecha Pago Real",
                             format="YYYY-MM-DD",
                         )
                     },
@@ -1184,10 +1187,13 @@ def main() -> None:
                                 "Ya existe un pago para estos gastos en el mes seleccionado: "
                                 + ", ".join(skipped)
                             )
+                total_pendiente = sum(r["monto_presupuestado"] for r in unpaid_rows)
+                st.markdown(f"<span style='font-size:1.1rem;color:#333333;'>Falta pagar <strong>{_format_amount(total_pendiente)}</strong> para este periodo</span>", unsafe_allow_html=True)
             else:
                 st.info("No hay pagos pendientes para registrar en ese mes.")
 
     if menu == "Resumen":
+        st.title("Resumen ")
         current_year, current_month = _current_month()
         if current_month == 1:
             cierre_year = current_year - 1
@@ -1198,11 +1204,31 @@ def main() -> None:
         months = _month_options()
         month_labels = [label for label, _ in months]
         month_values = [value for _, value in months]
+
+        st.subheader("Saldo cuenta corriente")
+        saldo_actual = _load_or_init_saldo(cuenta_df)
+        col_saldo, col_btn, _ = st.columns([2, 1, 3])
+        with col_saldo:
+            saldo_input = st.number_input(
+                "Saldo actual",
+                min_value=0.0,
+                step=1000.0,
+                value=float(saldo_actual),
+            )
+        with col_btn:
+            st.write("")
+            if st.button("Guardar saldo"):
+                cuenta_df = _set_saldo(cuenta_df, float(saldo_input))
+                data["cuenta"] = cuenta_df
+                _save_data(data, user_id)
+                st.success("Saldo actualizado.")
+
+        st.divider()
         st.subheader("Resumen del mes")
-        col_year, col_month = st.columns(2)
+        col_year, col_month, _ = st.columns([1, 1, 2])
         with col_year:
             selected_year_monthly = st.selectbox(
-                "Anio",
+                "Año",
                 list(range(current_year - 2, current_year + 3)),
                 index=list(range(current_year - 2, current_year + 3)).index(cierre_year),
                 key="resumen_anio",
@@ -1216,50 +1242,36 @@ def main() -> None:
             )
         selected_month = month_values[month_labels.index(selected_month_label)]
 
+        gm_mes_resumen = gastos_mensuales_df[
+            (gastos_mensuales_df["year"].astype(int) == int(selected_year_monthly)) &
+            (gastos_mensuales_df["month"].astype(int) == int(selected_month))
+        ]
+        total_pendiente = sum(
+            float(row.get("monto_presupuestado", 0.0))
+            for _, row in gm_mes_resumen.iterrows()
+            if float(row.get("monto_presupuestado", 0.0)) != 0.0
+            and _get_pago_for_month(pagos_df, int(row["gasto_id"]), selected_year_monthly, selected_month) is None
+        )
+        eerr_periodo = float(saldo_input) - total_pendiente
+
+        st.markdown(
+            f"<span style='font-size:1.1rem;color:#333333;'>Aún falta por pagar <strong>{_format_amount(total_pendiente)}</strong> para este periodo</span>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<span style='font-size:1.1rem;color:#333333;'>El EERR de este periodo es <strong>{_format_amount(eerr_periodo)}</strong></span>",
+            unsafe_allow_html=True,
+        )
+
+        st.subheader("Balance Anual")
+        annual_rows = []
         gastos_mensuales_map = _gastos_mensuales_map_for_year(
             gastos_mensuales_df,
             selected_year_monthly,
         )
-        total_gastos_presupuestados = sum(
-            monto
-            for (gasto_id, month), monto in gastos_mensuales_map.items()
-            if int(month) == int(selected_month)
-        )
-        total_gastos_reales = 0.0
-        if not pagos_df.empty:
-            for _, row in pagos_df.iterrows():
-                fecha_pago = _parse_date(row.get("fecha_pago_real"))
-                if not fecha_pago:
-                    continue
-                if fecha_pago.year != selected_year_monthly or fecha_pago.month != selected_month:
-                    continue
-                total_gastos_reales += float(row.get("monto_real", 0.0))
-
-        total_pendiente = max(total_gastos_presupuestados - total_gastos_reales, 0.0)
-
-        st.markdown(
-            f"Este mes estaba presupuestado gastar {_format_amount(total_gastos_presupuestados)} "
-            f"y a la fecha se ha gastado {_format_amount(total_gastos_reales)}."
-        )
-        st.markdown(
-            f"Falta por pagar {_format_amount(total_pendiente)} este mes."
-        )
-
-        st.subheader("Resumen anual")
-        year_options = list(range(current_year - 2, current_year + 3))
-        selected_year = st.selectbox(
-            "Anio",
-            year_options,
-            index=year_options.index(current_year),
-        )
-        annual_rows = []
-        gastos_mensuales_map = _gastos_mensuales_map_for_year(
-            gastos_mensuales_df,
-            selected_year,
-        )
         ingresos_mensuales_map = _ingresos_mensuales_map_for_year(
             ingresos_mensuales_df,
-            selected_year,
+            selected_year_monthly,
         )
         gastos_reales_map = {month: 0.0 for month in range(1, 13)}
         if not pagos_df.empty:
@@ -1267,7 +1279,7 @@ def main() -> None:
                 fecha_pago = _parse_date(row.get("fecha_pago_real"))
                 if not fecha_pago:
                     continue
-                if fecha_pago.year != selected_year:
+                if fecha_pago.year != selected_year_monthly:
                     continue
                 gastos_reales_map[fecha_pago.month] += float(row.get("monto_real", 0.0))
 
@@ -1361,61 +1373,46 @@ def main() -> None:
             _save_data(data, user_id)
             st.success("Comentario guardado.")
 
-    if menu == "Balance":
-        st.subheader("Saldo cuenta corriente")
-        saldo_actual = _load_or_init_saldo(cuenta_df)
-        saldo_input = st.number_input(
-            "Saldo actual",
-            min_value=0.0,
-            step=1000.0,
-            value=float(saldo_actual),
-        )
-        if st.button("Guardar saldo"):
-            cuenta_df = _set_saldo(cuenta_df, float(saldo_input))
-            data["cuenta"] = cuenta_df
-            _save_data(data, user_id)
-            st.success("Saldo actualizado.")
-
-        year, month = _current_month()
-        gastos_mensuales_map = _gastos_mensuales_map_for_year(
+        st.divider()
+        st.subheader("Proyección de saldo")
+        bal_year, bal_month = _current_month()
+        gastos_mensuales_map_bal = _gastos_mensuales_map_for_year(
             gastos_mensuales_df,
-            year,
+            bal_year,
         )
-        ingresos_mensuales_map = _ingresos_mensuales_map_for_year(
+        ingresos_mensuales_map_bal = _ingresos_mensuales_map_for_year(
             ingresos_mensuales_df,
-            year,
+            bal_year,
         )
         balance_restante = 0.0
-        for month_idx in range(month, 13):
+        for month_idx in range(bal_month, 13):
             total_gastos_mes = sum(
                 monto
-                for (gasto_id, m), monto in gastos_mensuales_map.items()
+                for (gasto_id, m), monto in gastos_mensuales_map_bal.items()
                 if int(m) == int(month_idx)
             )
             total_ingresos_mes = sum(
                 monto
-                for (ingreso_id, m), monto in ingresos_mensuales_map.items()
+                for (ingreso_id, m), monto in ingresos_mensuales_map_bal.items()
                 if int(m) == int(month_idx)
             )
             balance_restante += total_ingresos_mes - total_gastos_mes
 
-        saldo_proyectado = float(saldo_input) + balance_restante
+        saldo_proyectado = float(saldo_actual) + balance_restante
+        st.markdown(f"Tu balance para el {bal_year}, corresponde a:")
         st.markdown(
-            f"Tu balance para el {year}, corresponde a:"
-        )
-        st.markdown(
-            f"{_format_amount(saldo_input)} + {_format_amount(balance_restante)} = "
+            f"{_format_amount(saldo_actual)} + {_format_amount(balance_restante)} = "
             f"{_format_amount(saldo_proyectado)}"
         )
 
-        next_year = year + 1
+        next_year_bal = bal_year + 1
         gastos_mensuales_map_next = _gastos_mensuales_map_for_year(
             gastos_mensuales_df,
-            next_year,
+            next_year_bal,
         )
         ingresos_mensuales_map_next = _ingresos_mensuales_map_for_year(
             ingresos_mensuales_df,
-            next_year,
+            next_year_bal,
         )
         balance_next_year = 0.0
         for month_idx in range(1, 13):
@@ -1431,50 +1428,47 @@ def main() -> None:
             )
             balance_next_year += total_ingresos_mes - total_gastos_mes
 
-        st.markdown(
-            f"Tu balance para el {next_year}, corresponde a:"
-        )
-        st.markdown(
-            f"{_format_amount(balance_next_year)}"
-        )
-        gastos_pendientes = []
-        year_gm = gastos_mensuales_df[
-            (gastos_mensuales_df["year"].astype(int) == int(year)) &
-            (gastos_mensuales_df["month"].astype(int) == int(month))
+        st.markdown(f"Tu balance para el {next_year_bal}, corresponde a:")
+        st.markdown(f"{_format_amount(balance_next_year)}")
+
+        gastos_pendientes_bal = []
+        year_gm_bal = gastos_mensuales_df[
+            (gastos_mensuales_df["year"].astype(int) == int(bal_year)) &
+            (gastos_mensuales_df["month"].astype(int) == int(bal_month))
         ]
-        for _, gm_row in year_gm.iterrows():
+        for _, gm_row in year_gm_bal.iterrows():
             monto_mes = float(gm_row.get("monto_presupuestado", 0.0))
             if monto_mes == 0.0:
                 continue
-            gasto_id = int(gm_row["gasto_id"])
-            if _paid_in_month(pagos_df, gasto_id, year, month):
+            gasto_id_bal = int(gm_row["gasto_id"])
+            if _paid_in_month(pagos_df, gasto_id_bal, bal_year, bal_month):
                 continue
-            gastos_pendientes.append({
+            gastos_pendientes_bal.append({
                 "nombre": str(gm_row.get("nombre", "")),
                 "categoria": str(gm_row.get("categoria", "")),
                 "monto_presupuestado": monto_mes,
             })
 
-        if gastos_pendientes:
-            pendientes_df = _sort_by_categoria_nombre(pd.DataFrame(gastos_pendientes))
-            total_pendiente = float(pendientes_df["monto_presupuestado"].sum())
-            saldo_real = float(saldo_input) - total_pendiente
+        if gastos_pendientes_bal:
+            pendientes_df_bal = _sort_by_categoria_nombre(pd.DataFrame(gastos_pendientes_bal))
+            total_pendiente_bal = float(pendientes_df_bal["monto_presupuestado"].sum())
+            saldo_real_bal = float(saldo_actual) - total_pendiente_bal
             st.dataframe(
                 _format_amount_columns(
-                    pendientes_df[["nombre", "categoria", "monto_presupuestado"]],
+                    pendientes_df_bal[["nombre", "categoria", "monto_presupuestado"]],
                     ["monto_presupuestado"],
                 ),
                 use_container_width=True,
             )
             st.markdown(
-                f"**Total pendiente:** {_format_amount(total_pendiente)}  \\n"
-                f"**Saldo ajustado:** {_format_amount(saldo_real)}",
+                f"**Total pendiente:** {_format_amount(total_pendiente_bal)}  \\n"
+                f"**Saldo ajustado:** {_format_amount(saldo_real_bal)}",
                 unsafe_allow_html=True,
             )
         else:
             st.info("No hay gastos pendientes este mes.")
 
-    elif menu == "Usuarios":
+    if menu == "Usuarios":
         _render_gestion_usuarios()
 
 
@@ -1542,8 +1536,7 @@ def _render_login_page() -> None:
                     st.session_state["authenticated"] = True
                     st.session_state["username"] = username.strip()
                     st.session_state["user_id"] = user_id
-                    token = _make_session_token(user_id, username.strip())
-                    _set_session_cookie(token)
+                    st.session_state["_pending_cookie"] = _make_session_token(user_id, username.strip())
                     st.rerun()
                 else:
                     st.error("Usuario o contrasena incorrectos.")
@@ -1575,4 +1568,6 @@ if __name__ == "__main__":
     if not st.session_state.get("authenticated", False):
         _render_login_page()
     else:
+        if "_pending_cookie" in st.session_state:
+            _set_session_cookie(st.session_state.pop("_pending_cookie"))
         main()
