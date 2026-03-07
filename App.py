@@ -648,7 +648,6 @@ def _build_ingresos_por_mes_table(
 
 @log_time
 def main(cookie_manager=None) -> None:
-    st.set_page_config(page_title="Presupuesto Familiar", layout="wide")
     st.title("Presupuesto familiar")
 
     # --- user_id desde session_state ---
@@ -1534,6 +1533,8 @@ def _render_login_page(cookie_manager=None) -> None:
 
 
 if __name__ == "__main__":
+    st.set_page_config(page_title="Ordenate", layout="wide")
+
     # Inicializar tablas y agregar columna user_id si es necesario
     try:
         init_db()
@@ -1542,8 +1543,25 @@ if __name__ == "__main__":
         st.error(f"No se pudo conectar a la base de datos: {_db_err}")
         st.stop()
 
+    # Instanciar cookie manager (debe ir despues de set_page_config)
+    _cookie_manager = stx.CookieManager() if _STX_AVAILABLE else None
+
+    # Restaurar sesion desde cookie si el session_state fue reiniciado (ej. F5)
+    if not st.session_state.get("authenticated", False) and _cookie_manager is not None:
+        try:
+            _token = _cookie_manager.get(_COOKIE_NAME)
+            if _token:
+                _result = _verify_session_token(_token)
+                if _result:
+                    _uid, _uname = _result
+                    st.session_state["authenticated"] = True
+                    st.session_state["username"] = _uname
+                    st.session_state["user_id"] = _uid
+                    st.rerun()
+        except Exception:
+            pass
+
     if not st.session_state.get("authenticated", False):
-        st.set_page_config(page_title="Ordenate – Login", layout="centered")
-        _render_login_page()
+        _render_login_page(_cookie_manager)
     else:
-        main()
+        main(_cookie_manager)
