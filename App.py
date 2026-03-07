@@ -1,5 +1,10 @@
+import base64
 import calendar
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+import hashlib
+import hmac
+import os
+import time
 
 from logger import log_time
 from db import init_db, add_user_id_columns
@@ -9,6 +14,13 @@ from neon_data import load_data as _neon_load_data, save_data as _neon_save_data
 import altair as alt
 import pandas as pd
 import streamlit as st
+
+try:
+    import extra_streamlit_components as stx
+    _STX_AVAILABLE = True
+except ImportError:
+    stx = None
+    _STX_AVAILABLE = False
 
 try:
     from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode, GridUpdateMode, JsCode
@@ -39,6 +51,41 @@ CATEGORIAS = [
     "Ocio",
 ]
 
+# ── Sesión persistente via cookie ─────────────────────────────────────────────
+_SESSION_SECRET = os.environ.get("SESSION_SECRET", "ordenate-secret-key-change-in-prod")
+_SESSION_MAX_AGE = 7 * 24 * 3600  # 7 días
+_COOKIE_NAME = "ordenate_session"
+
+
+def _make_session_token(user_id: int, username: str) -> str:
+    """Genera un token firmado HMAC-SHA256 que incluye user_id, username y expiración."""
+    expiry = int(time.time()) + _SESSION_MAX_AGE
+    user_b64 = base64.urlsafe_b64encode(username.encode()).decode()
+    payload = f"{user_id}|{user_b64}|{expiry}"
+    sig = hmac.new(_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}|{sig}"
+
+
+def _verify_session_token(token: str) -> tuple[int, str] | None:
+    """Verifica el token. Devuelve (user_id, username) o None si es inválido/expirado."""
+    try:
+        parts = token.rsplit("|", 1)
+        if len(parts) != 2:
+            return None
+        payload, sig = parts
+        expected = hmac.new(_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return None
+        p = payload.split("|")
+        if len(p) != 3:
+            return None
+        user_id_str, user_b64, expiry_str = p
+        if int(time.time()) > int(expiry_str):
+            return None
+        username = base64.urlsafe_b64decode(user_b64.encode()).decode()
+        return int(user_id_str), username
+    except Exception:
+        return None
 
 
 def _empty_gastos_mensuales_df() -> pd.DataFrame:
@@ -600,7 +647,7 @@ def _build_ingresos_por_mes_table(
 
 
 @log_time
-def main() -> None:
+def main(cookie_manager=None) -> None:
     st.set_page_config(page_title="Presupuesto Familiar", layout="wide")
     st.title("Presupuesto familiar")
 
@@ -615,6 +662,11 @@ def main() -> None:
         st.session_state["authenticated"] = False
         st.session_state["username"] = ""
         st.session_state["user_id"] = None
+        if cookie_manager is not None:
+            try:
+                cookie_manager.delete(_COOKIE_NAME)
+            except Exception:
+                pass
         st.rerun()
     st.sidebar.divider()
 
@@ -650,6 +702,24 @@ def main() -> None:
     )
 
     if menu == "Panel de Gastos":
+        current_year, current_month = _current_month()
+        if current_month == 1:
+            cierre_year = current_year - 1
+            cierre_month = 12
+        else:
+            cierre_year = current_year
+            cierre_month = current_month - 1
+        months = _month_options()
+        month_labels = [label for label, _ in months]
+        month_values = [value for _, value in months]
+        year_options = list(range(current_year - 2, current_year + 3))
+        selected_year = st.selectbox(
+            "Año",
+            year_options,
+            index=year_options.index(current_year),
+            key="gastos_por_mes_anio",
+        )
+
         with st.expander("Ingresar Gasto", expanded=False):
             with st.form("form_gasto"):
                 nombre = st.text_input("Nombre del gasto")
@@ -737,24 +807,6 @@ def main() -> None:
                     data["ingresos_mensuales"] = ingresos_mensuales_df
                     _save_data(data, user_id)
                     st.success("Ingreso registrado.")
-
-        current_year, current_month = _current_month()
-        if current_month == 1:
-            cierre_year = current_year - 1
-            cierre_month = 12
-        else:
-            cierre_year = current_year
-            cierre_month = current_month - 1
-        months = _month_options()
-        month_labels = [label for label, _ in months]
-        month_values = [value for _, value in months]
-        year_options = list(range(current_year - 2, current_year + 3))
-        selected_year = st.selectbox(
-            "Anio",
-            year_options,
-            index=year_options.index(current_year),
-            key="gastos_por_mes_anio",
-        )
 
         st.subheader("Gastos presupuestados por mes")
         if gastos_mensuales_df.empty:
@@ -1444,7 +1496,7 @@ def _render_gestion_usuarios() -> None:
         st.info("No hay usuarios registrados.")
 
 
-def _render_login_page() -> None:
+def _render_login_page(cookie_manager=None) -> None:
     """Muestra el formulario de login. Si las credenciales son válidas,
     guarda el estado en session_state y hace rerun."""
     col_center = st.columns([1, 1, 1])[1]  # columna central
@@ -1466,6 +1518,16 @@ def _render_login_page() -> None:
                     st.session_state["authenticated"] = True
                     st.session_state["username"] = username.strip()
                     st.session_state["user_id"] = user_id
+                    if cookie_manager is not None:
+                        try:
+                            token = _make_session_token(user_id, username.strip())
+                            cookie_manager.set(
+                                _COOKIE_NAME,
+                                token,
+                                expires_at=datetime.now() + timedelta(days=7),
+                            )
+                        except Exception:
+                            pass
                     st.rerun()
                 else:
                     st.error("Usuario o contrasena incorrectos.")
