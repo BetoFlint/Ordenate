@@ -26,23 +26,15 @@ EXCEL_FILE = "presupuesto.xlsx"
 
 # ── DDL ────────────────────────────────────────────────────────────────────────
 DDL = """
-CREATE TABLE IF NOT EXISTS gastos (
-    gasto_id            SERIAL PRIMARY KEY,
-    nombre              TEXT        NOT NULL,
-    categoria           TEXT,
-    monto_presupuestado NUMERIC(14,2),
-    periodicidad        TEXT,
-    fecha_pago          INTEGER,
-    fecha_inicio        DATE,
-    fecha_termino       DATE
-);
-
 CREATE TABLE IF NOT EXISTS pagos (
     pago_id         SERIAL PRIMARY KEY,
-    gasto_id        INTEGER REFERENCES gastos(gasto_id) ON DELETE CASCADE,
+    gasto_id        INTEGER,
+    nombre          TEXT,
+    categoria       TEXT,
     monto_real      NUMERIC(14,2),
     fecha_pago_real DATE,
-    estado          TEXT
+    estado          TEXT,
+    user_id         INTEGER REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS ingresos (
@@ -52,20 +44,29 @@ CREATE TABLE IF NOT EXISTS ingresos (
     periodicidad  TEXT,
     fecha_pago    INTEGER,
     fecha_inicio  DATE,
-    fecha_termino DATE
+    fecha_termino DATE,
+    user_id       INTEGER REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS cuenta (
     id           SERIAL PRIMARY KEY,
-    saldo_actual NUMERIC(14,2)
+    saldo_actual NUMERIC(14,2),
+    user_id      INTEGER REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS gastos_mensuales (
     id                  SERIAL PRIMARY KEY,
-    gasto_id            INTEGER REFERENCES gastos(gasto_id) ON DELETE CASCADE,
+    gasto_id            INTEGER NOT NULL,
     year                INTEGER NOT NULL,
     month               INTEGER NOT NULL,
+    nombre              TEXT,
+    categoria           TEXT,
+    periodicidad        TEXT,
+    fecha_pago          INTEGER,
+    fecha_inicio        DATE,
+    fecha_termino       DATE,
     monto_presupuestado NUMERIC(14,2),
+    user_id             INTEGER REFERENCES users(id),
     UNIQUE(gasto_id, year, month)
 );
 
@@ -80,7 +81,8 @@ CREATE TABLE IF NOT EXISTS ingresos_mensuales (
 
 CREATE TABLE IF NOT EXISTS comentarios (
     id         SERIAL PRIMARY KEY,
-    comentario TEXT
+    comentario TEXT,
+    user_id    INTEGER REFERENCES users(id)
 );
 """
 
@@ -108,6 +110,17 @@ def _to_int(val) -> int | None:
     return int(val)
 
 
+def _to_str(val) -> str | None:
+    if val is None:
+        return None
+    try:
+        if pd.isna(val):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return str(val)
+
+
 # ── Migration functions ────────────────────────────────────────────────────────
 
 def drop_app_tables(cur) -> None:
@@ -132,7 +145,7 @@ def create_tables(cur) -> None:
 
 
 def check_existing_data(cur) -> dict[str, int]:
-    tables = ["gastos", "pagos", "ingresos", "cuenta",
+    tables = ["pagos", "ingresos", "cuenta",
               "gastos_mensuales", "ingresos_mensuales", "comentarios"]
     counts = {}
     for t in tables:
@@ -149,34 +162,9 @@ def truncate_tables(cur) -> None:
     print("  Limpiando tablas existentes...")
     cur.execute("""
         TRUNCATE TABLE comentarios, ingresos_mensuales, gastos_mensuales,
-                       cuenta, pagos, ingresos, gastos
+                       cuenta, pagos, ingresos
         RESTART IDENTITY CASCADE;
     """)
-
-
-def migrate_gastos(cur, df: pd.DataFrame) -> None:
-    print(f"  Migrando gastos ({len(df)} filas)...")
-    rows = []
-    for _, r in df.iterrows():
-        rows.append((
-            _to_int(r["gasto_id"]),
-            str(r["nombre"]),
-            str(r["categoria"]) if not pd.isna(r["categoria"]) else None,
-            _to_float(r["monto_presupuestado"]),
-            str(r["periodicidad"]) if not pd.isna(r["periodicidad"]) else None,
-            _to_int(r["fecha_pago"]),
-            _to_date(r["fecha_inicio"]),
-            _to_date(r["fecha_termino"]),
-        ))
-    psycopg2.extras.execute_values(cur, """
-        INSERT INTO gastos
-            (gasto_id, nombre, categoria, monto_presupuestado,
-             periodicidad, fecha_pago, fecha_inicio, fecha_termino)
-        VALUES %s
-        ON CONFLICT (gasto_id) DO NOTHING;
-    """, rows)
-    # Sincronizar secuencia SERIAL con el max id migrado
-    cur.execute("SELECT setval('gastos_gasto_id_seq', (SELECT MAX(gasto_id) FROM gastos));")
 
 
 def migrate_pagos(cur, df: pd.DataFrame) -> None:
@@ -186,12 +174,15 @@ def migrate_pagos(cur, df: pd.DataFrame) -> None:
         rows.append((
             _to_int(r["pago_id"]),
             _to_int(r["gasto_id"]),
+            _to_str(r.get("nombre")),
+            _to_str(r.get("categoria")),
             _to_float(r["monto_real"]),
             _to_date(r["fecha_pago_real"]),
             str(r["estado"]) if not pd.isna(r["estado"]) else None,
         ))
     psycopg2.extras.execute_values(cur, """
-        INSERT INTO pagos (pago_id, gasto_id, monto_real, fecha_pago_real, estado)
+        INSERT INTO pagos (pago_id, gasto_id, nombre, categoria,
+                           monto_real, fecha_pago_real, estado)
         VALUES %s
         ON CONFLICT (pago_id) DO NOTHING;
     """, rows)
@@ -238,10 +229,19 @@ def migrate_gastos_mensuales(cur, df: pd.DataFrame) -> None:
             _to_int(r["gasto_id"]),
             _to_int(r["year"]),
             _to_int(r["month"]),
+            _to_str(r.get("nombre")),
+            _to_str(r.get("categoria")),
+            _to_str(r.get("periodicidad")),
+            _to_int(r.get("fecha_pago")),
+            _to_date(r.get("fecha_inicio")),
+            _to_date(r.get("fecha_termino")),
             _to_float(r["monto_presupuestado"]),
         ))
     psycopg2.extras.execute_values(cur, """
-        INSERT INTO gastos_mensuales (gasto_id, year, month, monto_presupuestado)
+        INSERT INTO gastos_mensuales
+            (gasto_id, year, month, nombre, categoria,
+             periodicidad, fecha_pago, fecha_inicio, fecha_termino,
+             monto_presupuestado)
         VALUES %s
         ON CONFLICT (gasto_id, year, month) DO NOTHING;
     """, rows)
@@ -283,7 +283,6 @@ def main() -> None:
     print("Leyendo Excel...")
     try:
         dfs = {
-            "gastos":              pd.read_excel(EXCEL_FILE, sheet_name="gastos"),
             "pagos":               pd.read_excel(EXCEL_FILE, sheet_name="pagos"),
             "ingresos":            pd.read_excel(EXCEL_FILE, sheet_name="ingresos"),
             "cuenta":              pd.read_excel(EXCEL_FILE, sheet_name="cuenta"),
@@ -328,7 +327,6 @@ def main() -> None:
 
     # 5. Migrar en orden (respetando FK)
     print("\nMigrando datos...")
-    migrate_gastos(cur, dfs["gastos"])
     migrate_pagos(cur, dfs["pagos"])
     migrate_ingresos(cur, dfs["ingresos"])
     migrate_cuenta(cur, dfs["cuenta"])

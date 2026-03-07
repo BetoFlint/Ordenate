@@ -47,6 +47,12 @@ def _empty_gastos_mensuales_df() -> pd.DataFrame:
             "gasto_id",
             "year",
             "month",
+            "nombre",
+            "categoria",
+            "periodicidad",
+            "fecha_pago",
+            "fecha_inicio",
+            "fecha_termino",
             "monto_presupuestado",
         ]
     )
@@ -348,8 +354,8 @@ def _ingresos_mensuales_map_for_year(
     return ingresos
 
 
-def _presupuesto_for_month(row: pd.Series, year: int, month: int, gastos_mensuales_map: dict) -> float:
-    override = gastos_mensuales_map.get((int(row["gasto_id"]), int(month)))
+def _presupuesto_for_month(gasto_id: int, month: int, gastos_mensuales_map: dict) -> float:
+    override = gastos_mensuales_map.get((int(gasto_id), int(month)))
     if override is not None:
         return float(override)
     return 0.0
@@ -386,6 +392,12 @@ def _append_gasto_mensual_entries(
             "gasto_id": int(gasto_row["gasto_id"]),
             "year": int(year),
             "month": int(month),
+            "nombre": str(gasto_row.get("nombre", "")),
+            "categoria": str(gasto_row.get("categoria", "")),
+            "periodicidad": periodicidad,
+            "fecha_pago": gasto_row.get("fecha_pago"),
+            "fecha_inicio": gasto_row.get("fecha_inicio"),
+            "fecha_termino": gasto_row.get("fecha_termino"),
             "monto_presupuestado": monto,
         }
         for year, month in months
@@ -424,48 +436,15 @@ def _append_ingreso_mensual_entries(
 
 
 def _migrate_mensuales_from_base(
-    gastos_df: pd.DataFrame,
-    ingresos_df: pd.DataFrame,
     gastos_mensuales_df: pd.DataFrame,
+    ingresos_df: pd.DataFrame,
     ingresos_mensuales_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, bool]:
+    """Ya no hay tabla gastos; solo migra ingresos_mensuales si faltan filas."""
     changed = False
 
     if gastos_mensuales_df is None or gastos_mensuales_df.empty:
         gastos_mensuales_df = _empty_gastos_mensuales_df()
-    existing_gastos = set(
-        zip(
-            gastos_mensuales_df["gasto_id"].astype(int),
-            gastos_mensuales_df["year"].astype(int),
-            gastos_mensuales_df["month"].astype(int),
-        )
-    )
-    new_gastos_rows = []
-    for _, row in gastos_df.iterrows():
-        months = _months_for_row(
-            str(row.get("periodicidad", "")),
-            row.get("fecha_pago"),
-            row.get("fecha_inicio"),
-            row.get("fecha_termino"),
-        )
-        for year, month in months:
-            key = (int(row["gasto_id"]), int(year), int(month))
-            if key in existing_gastos:
-                continue
-            new_gastos_rows.append(
-                {
-                    "gasto_id": int(row["gasto_id"]),
-                    "year": int(year),
-                    "month": int(month),
-                    "monto_presupuestado": float(row.get("monto_presupuestado", 0.0)),
-                }
-            )
-            existing_gastos.add(key)
-    if new_gastos_rows:
-        gastos_mensuales_df = pd.concat(
-            [gastos_mensuales_df, pd.DataFrame(new_gastos_rows)], ignore_index=True
-        )
-        changed = True
 
     if ingresos_mensuales_df is None or ingresos_mensuales_df.empty:
         ingresos_mensuales_df = _empty_ingresos_mensuales_df()
@@ -591,31 +570,33 @@ def _apply_editor_ingresos(editor_df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data
 def _build_gastos_por_mes_table(
-    gastos_df: pd.DataFrame,
+    gastos_mensuales_df: pd.DataFrame,
     year: int,
-    gastos_mensuales_df: pd.DataFrame | None = None,
     include_gasto_id: bool = False,
 ) -> pd.DataFrame:
-    
-    if gastos_df.empty:
+    """Construye la tabla anual de gastos presupuestados directamente desde gastos_mensuales."""
+    if gastos_mensuales_df is None or gastos_mensuales_df.empty:
         return pd.DataFrame()
     month_labels = [_month_label(month) for month in range(1, 13)]
-    gastos_mensuales_map = (
-        _gastos_mensuales_map_for_year(gastos_mensuales_df, year)
-        if gastos_mensuales_df is not None
-        else {}
+    year_df = gastos_mensuales_df[gastos_mensuales_df["year"].astype(int) == int(year)]
+    # Obtener lista única de gastos (gasto_id, nombre, categoria)
+    gastos_unicos = (
+        year_df[["gasto_id", "nombre", "categoria"]]
+        .drop_duplicates(subset=["gasto_id"])
+        .reset_index(drop=True)
     )
+    gastos_mensuales_map = _gastos_mensuales_map_for_year(gastos_mensuales_df, year)
     rows = []
-    for _, row in gastos_df.iterrows():
+    for _, gasto in gastos_unicos.iterrows():
+        gasto_id = int(gasto["gasto_id"])
         row_data = {
-            "gasto_id": int(row["gasto_id"]),
-            "Gasto": str(row["nombre"]),
-            "Categoria": str(row["categoria"]),
+            "gasto_id": gasto_id,
+            "Gasto": str(gasto["nombre"]),
+            "Categoria": str(gasto["categoria"]),
         }
         for month in range(1, 13):
             row_data[_month_label(month)] = _presupuesto_for_month(
-                row,
-                year,
+                gasto_id,
                 month,
                 gastos_mensuales_map,
             )
@@ -693,7 +674,6 @@ def main() -> None:
     st.sidebar.info(f"AgGrid: {aggrid_status}  {'v' + _AGGRID_VERSION if _AGGRID_AVAILABLE and _AGGRID_VERSION else ''}")
 
     data = _load_data(user_id)
-    gastos_df = data["gastos"].copy()
     pagos_df = data["pagos"].copy()
     ingresos_df = data["ingresos"].copy()
     cuenta_df = data["cuenta"].copy()
@@ -701,9 +681,8 @@ def main() -> None:
     ingresos_mensuales_df = data["ingresos_mensuales"].copy()
     comentarios_df = data.get("comentarios", _empty_comentarios_df()).copy()
     gastos_mensuales_df, ingresos_mensuales_df, did_migrate = _migrate_mensuales_from_base(
-        gastos_df,
-        ingresos_df,
         gastos_mensuales_df,
+        ingresos_df,
         ingresos_mensuales_df,
     )
     if did_migrate:
@@ -748,7 +727,7 @@ def main() -> None:
                 if not _normalize_text(nombre):
                     st.error("El nombre del gasto es obligatorio.")
                 else:
-                    gasto_id = _next_id(gastos_df["gasto_id"])
+                    gasto_id = _next_id(gastos_mensuales_df["gasto_id"] if not gastos_mensuales_df.empty else pd.Series(dtype=int))
                     new_row = {
                         "gasto_id": gasto_id,
                         "nombre": _normalize_text(nombre),
@@ -759,10 +738,6 @@ def main() -> None:
                         "fecha_inicio": fecha_inicio,
                         "fecha_termino": fecha_termino,
                     }
-                    gastos_df = pd.concat(
-                        [gastos_df, pd.DataFrame([new_row])], ignore_index=True
-                    )
-                    data["gastos"] = gastos_df
                     gastos_mensuales_df = _append_gasto_mensual_entries(
                         gastos_mensuales_df,
                         new_row,
@@ -836,13 +811,12 @@ def main() -> None:
         )
 
         st.subheader("Gastos presupuestados por mes")
-        if gastos_df.empty:
+        if gastos_mensuales_df.empty:
             st.info("No hay gastos registrados.")
         else:
             editable_table = _build_gastos_por_mes_table(
-                gastos_df,
-                selected_year,
                 gastos_mensuales_df,
+                selected_year,
                 include_gasto_id=True,
             ).set_index("gasto_id")
             month_labels = [_month_label(month) for month in range(1, 13)]
@@ -883,13 +857,11 @@ def main() -> None:
                     if not delete_ids:
                         st.info("No hay gastos marcados para eliminar.")
                     else:
-                        gastos_df = gastos_df[~gastos_df["gasto_id"].isin(delete_ids)]
                         pagos_df = pagos_df[~pagos_df["gasto_id"].isin(delete_ids)]
                         if not gastos_mensuales_df.empty:
                             gastos_mensuales_df = gastos_mensuales_df[
                                 ~gastos_mensuales_df["gasto_id"].isin(delete_ids)
                             ]
-                        data["gastos"] = gastos_df
                         data["pagos"] = pagos_df
                         data["gastos_mensuales"] = gastos_mensuales_df
                         _save_data(data, user_id)
@@ -901,14 +873,27 @@ def main() -> None:
                         for month in range(1, 13):
                             label = _month_label(month)
                             edited_val = _parse_amount(row.get(label))
-                            new_rows.append(
-                                {
-                                    "gasto_id": int(gasto_id),
-                                    "year": int(selected_year),
-                                    "month": int(month),
-                                    "monto_presupuestado": float(edited_val),
-                                }
-                            )
+                            # Preservar nombre/categoria/otros campos de la fila existente
+                            existing = gastos_mensuales_df[
+                                (gastos_mensuales_df["gasto_id"].astype(int) == int(gasto_id)) &
+                                (gastos_mensuales_df["year"].astype(int) == int(selected_year)) &
+                                (gastos_mensuales_df["month"].astype(int) == int(month))
+                            ]
+                            if not existing.empty:
+                                base = existing.iloc[0].to_dict()
+                            else:
+                                # Tomar metadata del gasto desde cualquier fila con ese gasto_id
+                                ref = gastos_mensuales_df[
+                                    gastos_mensuales_df["gasto_id"].astype(int) == int(gasto_id)
+                                ]
+                                base = ref.iloc[0].to_dict() if not ref.empty else {}
+                            base.update({
+                                "gasto_id": int(gasto_id),
+                                "year": int(selected_year),
+                                "month": int(month),
+                                "monto_presupuestado": float(edited_val),
+                            })
+                            new_rows.append(base)
 
                     if gastos_mensuales_df.empty:
                         other_rows = _empty_gastos_mensuales_df()
@@ -923,16 +908,6 @@ def main() -> None:
                         gastos_mensuales_df = _empty_gastos_mensuales_df()
                     data["gastos_mensuales"] = gastos_mensuales_df
                     _save_data(data, user_id)
-                    refreshed_table = _build_gastos_por_mes_table(
-                        gastos_df,
-                        selected_year,
-                        gastos_mensuales_df,
-                        include_gasto_id=True,
-                    ).set_index("gasto_id")
-                    refreshed_display = _format_amount_columns(
-                        refreshed_table,
-                        [_month_label(month) for month in range(1, 13)],
-                    )
                     st.rerun()
                     st.success("Montos guardados.")
             with tab_gastos_aggrid:
@@ -1024,36 +999,29 @@ def main() -> None:
                 key="pagos_mes_mes",
             )
         selected_month_pagos = month_values[month_labels.index(selected_month_label_pagos)]
-        gastos_mes = []
-        gastos_mensuales_map = _gastos_mensuales_map_for_year(
-            gastos_mensuales_df,
-            selected_year_pagos,
-        )
-        for _, row in gastos_df.iterrows():
-            monto_mes = _presupuesto_for_month(
-                row,
-                selected_year_pagos,
-                selected_month_pagos,
-                gastos_mensuales_map,
-            )
-            if monto_mes == 0.0:
-                continue
-            row_data = row.copy()
-            row_data["monto_presupuestado_mes"] = monto_mes
-            gastos_mes.append(row_data)
+        # Obtener gastos del mes directamente desde gastos_mensuales
+        gm_mes = gastos_mensuales_df[
+            (gastos_mensuales_df["year"].astype(int) == int(selected_year_pagos)) &
+            (gastos_mensuales_df["month"].astype(int) == int(selected_month_pagos))
+        ]
+        gastos_mes = [
+            row.to_dict()
+            for _, row in gm_mes.iterrows()
+            if float(row.get("monto_presupuestado", 0.0)) != 0.0
+        ]
 
         if not gastos_mes:
             st.info("No hay gastos presupuestados para ese mes.")
         else:
             unpaid_rows = []
             paid_rows = []
-            for _, row in pd.DataFrame(gastos_mes).iterrows():
+            for row in gastos_mes:
                 gasto_id = int(row["gasto_id"])
                 base = {
                     "gasto_id": gasto_id,
-                    "nombre": str(row["nombre"]),
-                    "categoria": str(row["categoria"]),
-                    "monto_presupuestado": float(row["monto_presupuestado_mes"]),
+                    "nombre": str(row.get("nombre", "")),
+                    "categoria": str(row.get("categoria", "")),
+                    "monto_presupuestado": float(row.get("monto_presupuestado", 0.0)),
                 }
                 existing_pago = _get_pago_for_month(
                     pagos_df,
@@ -1065,7 +1033,7 @@ def main() -> None:
                     unpaid_rows.append(
                         {
                             **base,
-                            "monto_real": float(row["monto_presupuestado_mes"]),
+                            "monto_real": float(row.get("monto_presupuestado", 0.0)),
                             "fecha_pago_real": date(selected_year_pagos, selected_month_pagos, 1),
                             "pagar": False,
                         }
@@ -1230,14 +1198,11 @@ def main() -> None:
             gastos_mensuales_df,
             selected_year_monthly,
         )
-        total_gastos_presupuestados = 0.0
-        for _, row in gastos_df.iterrows():
-            total_gastos_presupuestados += _presupuesto_for_month(
-                row,
-                selected_year_monthly,
-                selected_month,
-                gastos_mensuales_map,
-            )
+        total_gastos_presupuestados = sum(
+            monto
+            for (gasto_id, month), monto in gastos_mensuales_map.items()
+            if int(month) == int(selected_month)
+        )
         total_gastos_reales = 0.0
         if not pagos_df.empty:
             for _, row in pagos_df.iterrows():
@@ -1285,14 +1250,11 @@ def main() -> None:
                 gastos_reales_map[fecha_pago.month] += float(row.get("monto_real", 0.0))
 
         for month in range(1, 13):
-            total_gastos_mes = 0.0
-            for _, row in gastos_df.iterrows():
-                total_gastos_mes += _presupuesto_for_month(
-                    row,
-                    selected_year,
-                    month,
-                    gastos_mensuales_map,
-                )
+            total_gastos_mes = sum(
+                monto
+                for (gasto_id, m), monto in gastos_mensuales_map.items()
+                if int(m) == int(month)
+            )
             total_ingresos_mes = 0.0
             for _, row in ingresos_df.iterrows():
                 total_ingresos_mes += _monto_ingreso_for_month(
@@ -1406,14 +1368,11 @@ def main() -> None:
         )
         balance_restante = 0.0
         for month_idx in range(month, 13):
-            total_gastos_mes = 0.0
-            for _, row in gastos_df.iterrows():
-                total_gastos_mes += _presupuesto_for_month(
-                    row,
-                    year,
-                    month_idx,
-                    gastos_mensuales_map,
-                )
+            total_gastos_mes = sum(
+                monto
+                for (gasto_id, m), monto in gastos_mensuales_map.items()
+                if int(m) == int(month_idx)
+            )
             total_ingresos_mes = 0.0
             for _, row in ingresos_df.iterrows():
                 total_ingresos_mes += _monto_ingreso_for_month(
@@ -1444,14 +1403,11 @@ def main() -> None:
         )
         balance_next_year = 0.0
         for month_idx in range(1, 13):
-            total_gastos_mes = 0.0
-            for _, row in gastos_df.iterrows():
-                total_gastos_mes += _presupuesto_for_month(
-                    row,
-                    next_year,
-                    month_idx,
-                    gastos_mensuales_map_next,
-                )
+            total_gastos_mes = sum(
+                monto
+                for (gasto_id, m), monto in gastos_mensuales_map_next.items()
+                if int(m) == int(month_idx)
+            )
             total_ingresos_mes = 0.0
             for _, row in ingresos_df.iterrows():
                 total_ingresos_mes += _monto_ingreso_for_month(
@@ -1469,16 +1425,22 @@ def main() -> None:
             f"{_format_amount(balance_next_year)}"
         )
         gastos_pendientes = []
-        for _, row in gastos_df.iterrows():
-            monto_mes = _presupuesto_for_month(row, year, month, gastos_mensuales_map)
+        year_gm = gastos_mensuales_df[
+            (gastos_mensuales_df["year"].astype(int) == int(year)) &
+            (gastos_mensuales_df["month"].astype(int) == int(month))
+        ]
+        for _, gm_row in year_gm.iterrows():
+            monto_mes = float(gm_row.get("monto_presupuestado", 0.0))
             if monto_mes == 0.0:
                 continue
-            gasto_id = int(row["gasto_id"])
+            gasto_id = int(gm_row["gasto_id"])
             if _paid_in_month(pagos_df, gasto_id, year, month):
                 continue
-            row_data = row.copy()
-            row_data["monto_presupuestado"] = monto_mes
-            gastos_pendientes.append(row_data)
+            gastos_pendientes.append({
+                "nombre": str(gm_row.get("nombre", "")),
+                "categoria": str(gm_row.get("categoria", "")),
+                "monto_presupuestado": monto_mes,
+            })
 
         if gastos_pendientes:
             pendientes_df = _sort_by_categoria_nombre(pd.DataFrame(gastos_pendientes))
