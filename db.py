@@ -68,17 +68,17 @@ def add_user_id_columns() -> None:
     """
     statements = [
         # Añadir columna si no existe (idempotente)
-        "ALTER TABLE ingresos    ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
-        "ALTER TABLE cuenta      ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
-        "ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
-        "ALTER TABLE pagos       ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
-        "ALTER TABLE gastos_mensuales ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
+        "ALTER TABLE cuenta               ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
+        "ALTER TABLE comentarios          ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
+        "ALTER TABLE pagos                ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
+        "ALTER TABLE gastos_mensuales     ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
+        "ALTER TABLE ingresos_mensuales   ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);",
         # Asignar registros huérfanos al primer usuario (admin)
-        "UPDATE ingresos    SET user_id = 1 WHERE user_id IS NULL;",
-        "UPDATE cuenta      SET user_id = 1 WHERE user_id IS NULL;",
-        "UPDATE comentarios SET user_id = 1 WHERE user_id IS NULL;",
-        "UPDATE pagos       SET user_id = 1 WHERE user_id IS NULL;",
-        "UPDATE gastos_mensuales SET user_id = 1 WHERE user_id IS NULL;",
+        "UPDATE cuenta               SET user_id = 1 WHERE user_id IS NULL;",
+        "UPDATE comentarios          SET user_id = 1 WHERE user_id IS NULL;",
+        "UPDATE pagos                SET user_id = 1 WHERE user_id IS NULL;",
+        "UPDATE gastos_mensuales     SET user_id = 1 WHERE user_id IS NULL;",
+        "UPDATE ingresos_mensuales   SET user_id = 1 WHERE user_id IS NULL;",
     ]
     with get_connection() as conn:
         with conn.cursor() as cur:

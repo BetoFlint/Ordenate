@@ -37,17 +37,6 @@ CREATE TABLE IF NOT EXISTS pagos (
     user_id         INTEGER REFERENCES users(id)
 );
 
-CREATE TABLE IF NOT EXISTS ingresos (
-    ingreso_id    SERIAL PRIMARY KEY,
-    nombre        TEXT        NOT NULL,
-    monto         NUMERIC(14,2),
-    periodicidad  TEXT,
-    fecha_pago    INTEGER,
-    fecha_inicio  DATE,
-    fecha_termino DATE,
-    user_id       INTEGER REFERENCES users(id)
-);
-
 CREATE TABLE IF NOT EXISTS cuenta (
     id           SERIAL PRIMARY KEY,
     saldo_actual NUMERIC(14,2),
@@ -71,11 +60,17 @@ CREATE TABLE IF NOT EXISTS gastos_mensuales (
 );
 
 CREATE TABLE IF NOT EXISTS ingresos_mensuales (
-    id         SERIAL PRIMARY KEY,
-    ingreso_id INTEGER REFERENCES ingresos(ingreso_id) ON DELETE CASCADE,
-    year       INTEGER NOT NULL,
-    month      INTEGER NOT NULL,
-    monto      NUMERIC(14,2),
+    id            SERIAL PRIMARY KEY,
+    ingreso_id    INTEGER NOT NULL,
+    year          INTEGER NOT NULL,
+    month         INTEGER NOT NULL,
+    nombre        TEXT,
+    periodicidad  TEXT,
+    fecha_pago    INTEGER,
+    fecha_inicio  DATE,
+    fecha_termino DATE,
+    monto         NUMERIC(14,2),
+    user_id       INTEGER REFERENCES users(id),
     UNIQUE(ingreso_id, year, month)
 );
 
@@ -133,7 +128,6 @@ def drop_app_tables(cur) -> None:
             gastos_mensuales,
             cuenta,
             pagos,
-            ingresos,
             gastos
         CASCADE;
     """)
@@ -145,7 +139,7 @@ def create_tables(cur) -> None:
 
 
 def check_existing_data(cur) -> dict[str, int]:
-    tables = ["pagos", "ingresos", "cuenta",
+    tables = ["pagos", "cuenta",
               "gastos_mensuales", "ingresos_mensuales", "comentarios"]
     counts = {}
     for t in tables:
@@ -162,7 +156,7 @@ def truncate_tables(cur) -> None:
     print("  Limpiando tablas existentes...")
     cur.execute("""
         TRUNCATE TABLE comentarios, ingresos_mensuales, gastos_mensuales,
-                       cuenta, pagos, ingresos
+                       cuenta, pagos
         RESTART IDENTITY CASCADE;
     """)
 
@@ -187,29 +181,6 @@ def migrate_pagos(cur, df: pd.DataFrame) -> None:
         ON CONFLICT (pago_id) DO NOTHING;
     """, rows)
     cur.execute("SELECT setval('pagos_pago_id_seq', (SELECT MAX(pago_id) FROM pagos));")
-
-
-def migrate_ingresos(cur, df: pd.DataFrame) -> None:
-    print(f"  Migrando ingresos ({len(df)} filas)...")
-    rows = []
-    for _, r in df.iterrows():
-        rows.append((
-            _to_int(r["ingreso_id"]),
-            str(r["nombre"]),
-            _to_float(r["monto"]),
-            str(r["periodicidad"]) if not pd.isna(r["periodicidad"]) else None,
-            _to_int(r["fecha_pago"]),
-            _to_date(r["fecha_inicio"]),
-            _to_date(r["fecha_termino"]),
-        ))
-    psycopg2.extras.execute_values(cur, """
-        INSERT INTO ingresos
-            (ingreso_id, nombre, monto, periodicidad,
-             fecha_pago, fecha_inicio, fecha_termino)
-        VALUES %s
-        ON CONFLICT (ingreso_id) DO NOTHING;
-    """, rows)
-    cur.execute("SELECT setval('ingresos_ingreso_id_seq', (SELECT MAX(ingreso_id) FROM ingresos));")
 
 
 def migrate_cuenta(cur, df: pd.DataFrame) -> None:
@@ -255,10 +226,17 @@ def migrate_ingresos_mensuales(cur, df: pd.DataFrame) -> None:
             _to_int(r["ingreso_id"]),
             _to_int(r["year"]),
             _to_int(r["month"]),
-            _to_float(r["monto"]),
+            _to_str(r.get("nombre")),
+            _to_str(r.get("periodicidad")),
+            _to_int(r.get("fecha_pago")),
+            _to_date(r.get("fecha_inicio")),
+            _to_date(r.get("fecha_termino")),
+            _to_float(r.get("monto")),
         ))
     psycopg2.extras.execute_values(cur, """
-        INSERT INTO ingresos_mensuales (ingreso_id, year, month, monto)
+        INSERT INTO ingresos_mensuales
+            (ingreso_id, year, month, nombre, periodicidad,
+             fecha_pago, fecha_inicio, fecha_termino, monto)
         VALUES %s
         ON CONFLICT (ingreso_id, year, month) DO NOTHING;
     """, rows)
@@ -284,7 +262,6 @@ def main() -> None:
     try:
         dfs = {
             "pagos":               pd.read_excel(EXCEL_FILE, sheet_name="pagos"),
-            "ingresos":            pd.read_excel(EXCEL_FILE, sheet_name="ingresos"),
             "cuenta":              pd.read_excel(EXCEL_FILE, sheet_name="cuenta"),
             "gastos_mensuales":    pd.read_excel(EXCEL_FILE, sheet_name="gastos_mensuales"),
             "ingresos_mensuales":  pd.read_excel(EXCEL_FILE, sheet_name="ingresos_mensuales"),
@@ -328,7 +305,6 @@ def main() -> None:
     # 5. Migrar en orden (respetando FK)
     print("\nMigrando datos...")
     migrate_pagos(cur, dfs["pagos"])
-    migrate_ingresos(cur, dfs["ingresos"])
     migrate_cuenta(cur, dfs["cuenta"])
     migrate_gastos_mensuales(cur, dfs["gastos_mensuales"])
     migrate_ingresos_mensuales(cur, dfs["ingresos_mensuales"])

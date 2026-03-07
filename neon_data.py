@@ -98,12 +98,6 @@ def load_data(user_id: int) -> dict:
             "FROM pagos WHERE user_id = %(uid)s ORDER BY pago_id",
             conn, params={"uid": uid},
         )
-        ingresos = pd.read_sql(
-            "SELECT ingreso_id, nombre, monto, periodicidad, "
-            "       fecha_pago, fecha_inicio, fecha_termino "
-            "FROM ingresos WHERE user_id = %(uid)s ORDER BY ingreso_id",
-            conn, params={"uid": uid},
-        )
         cuenta = pd.read_sql(
             "SELECT saldo_actual FROM cuenta WHERE user_id = %(uid)s LIMIT 1",
             conn, params={"uid": uid},
@@ -117,10 +111,10 @@ def load_data(user_id: int) -> dict:
             conn, params={"uid": uid},
         )
         ingresos_mensuales = pd.read_sql(
-            "SELECT im.ingreso_id, im.year, im.month, im.monto "
-            "FROM ingresos_mensuales im "
-            "JOIN ingresos i ON im.ingreso_id = i.ingreso_id "
-            "WHERE i.user_id = %(uid)s ORDER BY im.ingreso_id, im.year, im.month",
+            "SELECT ingreso_id, year, month, nombre, periodicidad, "
+            "       fecha_pago, fecha_inicio, fecha_termino, monto "
+            "FROM ingresos_mensuales WHERE user_id = %(uid)s "
+            "ORDER BY ingreso_id, year, month",
             conn, params={"uid": uid},
         )
         comentarios = pd.read_sql(
@@ -132,7 +126,6 @@ def load_data(user_id: int) -> dict:
     for df, col in [
         (pagos, "pago_id"),
         (pagos, "gasto_id"),
-        (ingresos, "ingreso_id"),
         (gastos_mensuales, "gasto_id"),
         (ingresos_mensuales, "ingreso_id"),
     ]:
@@ -145,7 +138,6 @@ def load_data(user_id: int) -> dict:
 
     return {
         "pagos": pagos,
-        "ingresos": ingresos,
         "cuenta": cuenta,
         "gastos_mensuales": gastos_mensuales,
         "ingresos_mensuales": ingresos_mensuales,
@@ -164,7 +156,6 @@ def save_data(data: dict, user_id: int) -> None:
     """
     uid = int(user_id)
     pagos_df              = data.get("pagos",              pd.DataFrame())
-    ingresos_df           = data.get("ingresos",           pd.DataFrame())
     cuenta_df             = data.get("cuenta",             pd.DataFrame())
     gastos_mensuales_df   = data.get("gastos_mensuales",   pd.DataFrame())
     ingresos_mensuales_df = data.get("ingresos_mensuales", pd.DataFrame())
@@ -177,45 +168,14 @@ def save_data(data: dict, user_id: int) -> None:
     try:
         # 1. Borrar solo los datos del usuario (orden hijo → padre)
         cur.execute("DELETE FROM comentarios WHERE user_id = %s;", (uid,))
-        cur.execute(
-            "DELETE FROM ingresos_mensuales im "
-            "USING ingresos i WHERE im.ingreso_id = i.ingreso_id AND i.user_id = %s;",
-            (uid,),
-        )
+        cur.execute("DELETE FROM ingresos_mensuales WHERE user_id = %s;", (uid,))
         cur.execute("DELETE FROM gastos_mensuales WHERE user_id = %s;", (uid,))
         cur.execute("DELETE FROM cuenta WHERE user_id = %s;", (uid,))
         cur.execute("DELETE FROM pagos WHERE user_id = %s;", (uid,))
-        cur.execute("DELETE FROM ingresos WHERE user_id = %s;", (uid,))
 
         # 2. Insertar con user_id (orden padre → hijo)
 
-        # ingresos
-        if not ingresos_df.empty:
-            ingresos_rows = [
-                (
-                    _to_int(r["ingreso_id"]),
-                    _to_str(r["nombre"]),
-                    _to_float(r.get("monto")),
-                    _to_str(r.get("periodicidad")),
-                    _to_int(r.get("fecha_pago")),
-                    _to_pg_date(r.get("fecha_inicio")),
-                    _to_pg_date(r.get("fecha_termino")),
-                    uid,
-                )
-                for _, r in ingresos_df.iterrows()
-            ]
-            psycopg2.extras.execute_values(cur, """
-                INSERT INTO ingresos
-                    (ingreso_id, nombre, monto, periodicidad,
-                     fecha_pago, fecha_inicio, fecha_termino, user_id)
-                VALUES %s;
-            """, ingresos_rows)
-            cur.execute(
-                "SELECT setval('ingresos_ingreso_id_seq', "
-                "(SELECT COALESCE(MAX(ingreso_id), 0) FROM ingresos));"
-            )
-
-        # pagos (ahora incluye nombre, categoria y user_id propio)
+        # pagos (incluye nombre, categoria y user_id propio)
         if not pagos_df.empty:
             pagos_rows = [
                 (
@@ -245,7 +205,7 @@ def save_data(data: dict, user_id: int) -> None:
             saldo = _to_float(cuenta_df.iloc[0]["saldo_actual"])
             cur.execute("INSERT INTO cuenta (saldo_actual, user_id) VALUES (%s, %s);", (saldo, uid))
 
-        # gastos_mensuales (ahora incluye nombre, categoria y user_id propio)
+        # gastos_mensuales
         if not gastos_mensuales_df.empty:
             gm_rows = [
                 (
@@ -271,19 +231,27 @@ def save_data(data: dict, user_id: int) -> None:
                 VALUES %s;
             """, gm_rows)
 
-        # ingresos_mensuales (sin user_id propio, hereda via ingreso_id → ingresos.user_id)
+        # ingresos_mensuales
         if not ingresos_mensuales_df.empty:
             im_rows = [
                 (
                     _to_int(r["ingreso_id"]),
                     _to_int(r["year"]),
                     _to_int(r["month"]),
+                    _to_str(r.get("nombre")),
+                    _to_str(r.get("periodicidad")),
+                    _to_int(r.get("fecha_pago")),
+                    _to_pg_date(r.get("fecha_inicio")),
+                    _to_pg_date(r.get("fecha_termino")),
                     _to_float(r.get("monto")),
+                    uid,
                 )
                 for _, r in ingresos_mensuales_df.iterrows()
             ]
             psycopg2.extras.execute_values(cur, """
-                INSERT INTO ingresos_mensuales (ingreso_id, year, month, monto)
+                INSERT INTO ingresos_mensuales
+                    (ingreso_id, year, month, nombre, periodicidad,
+                     fecha_pago, fecha_inicio, fecha_termino, monto, user_id)
                 VALUES %s;
             """, im_rows)
 
