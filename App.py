@@ -1,6 +1,6 @@
 import base64
 import calendar
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 import hashlib
 import hmac
 import os
@@ -14,13 +14,7 @@ from neon_data import load_data as _neon_load_data, save_data as _neon_save_data
 import altair as alt
 import pandas as pd
 import streamlit as st
-
-try:
-    import extra_streamlit_components as stx
-    _STX_AVAILABLE = True
-except ImportError:
-    stx = None
-    _STX_AVAILABLE = False
+import streamlit.components.v1 as _st_components
 
 try:
     from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode, GridUpdateMode, JsCode
@@ -86,6 +80,41 @@ def _verify_session_token(token: str) -> tuple[int, str] | None:
         return int(user_id_str), username
     except Exception:
         return None
+
+
+def _get_session_cookie() -> str | None:
+    """Lee la cookie de sesión directamente desde los headers HTTP del request actual."""
+    try:
+        cookie_header = st.context.headers.get("Cookie", "")
+        for part in cookie_header.split(";"):
+            part = part.strip()
+            if "=" in part:
+                k, v = part.split("=", 1)
+                if k.strip() == _COOKIE_NAME:
+                    return v.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _set_session_cookie(token: str) -> None:
+    """Escribe la cookie de sesión en el navegador via JavaScript."""
+    _st_components.html(
+        f"""<script>
+        document.cookie = "{_COOKIE_NAME}={token}; path=/; max-age={_SESSION_MAX_AGE}; SameSite=Lax";
+        </script>""",
+        height=0,
+    )
+
+
+def _delete_session_cookie() -> None:
+    """Elimina la cookie de sesión del navegador."""
+    _st_components.html(
+        f"""<script>
+        document.cookie = "{_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax";
+        </script>""",
+        height=0,
+    )
 
 
 def _empty_gastos_mensuales_df() -> pd.DataFrame:
@@ -647,7 +676,7 @@ def _build_ingresos_por_mes_table(
 
 
 @log_time
-def main(cookie_manager=None) -> None:
+def main() -> None:
     st.title("Presupuesto familiar")
 
     # --- user_id desde session_state ---
@@ -661,11 +690,7 @@ def main(cookie_manager=None) -> None:
         st.session_state["authenticated"] = False
         st.session_state["username"] = ""
         st.session_state["user_id"] = None
-        if cookie_manager is not None:
-            try:
-                cookie_manager.delete(_COOKIE_NAME)
-            except Exception:
-                pass
+        _delete_session_cookie()
         st.rerun()
     st.sidebar.divider()
 
@@ -1495,7 +1520,7 @@ def _render_gestion_usuarios() -> None:
         st.info("No hay usuarios registrados.")
 
 
-def _render_login_page(cookie_manager=None) -> None:
+def _render_login_page() -> None:
     """Muestra el formulario de login. Si las credenciales son válidas,
     guarda el estado en session_state y hace rerun."""
     col_center = st.columns([1, 1, 1])[1]  # columna central
@@ -1517,16 +1542,8 @@ def _render_login_page(cookie_manager=None) -> None:
                     st.session_state["authenticated"] = True
                     st.session_state["username"] = username.strip()
                     st.session_state["user_id"] = user_id
-                    if cookie_manager is not None:
-                        try:
-                            token = _make_session_token(user_id, username.strip())
-                            cookie_manager.set(
-                                _COOKIE_NAME,
-                                token,
-                                expires_at=datetime.now() + timedelta(days=7),
-                            )
-                        except Exception:
-                            pass
+                    token = _make_session_token(user_id, username.strip())
+                    _set_session_cookie(token)
                     st.rerun()
                 else:
                     st.error("Usuario o contrasena incorrectos.")
@@ -1543,25 +1560,19 @@ if __name__ == "__main__":
         st.error(f"No se pudo conectar a la base de datos: {_db_err}")
         st.stop()
 
-    # Instanciar cookie manager (debe ir despues de set_page_config)
-    _cookie_manager = stx.CookieManager() if _STX_AVAILABLE else None
-
-    # Restaurar sesion desde cookie si el session_state fue reiniciado (ej. F5)
-    if not st.session_state.get("authenticated", False) and _cookie_manager is not None:
-        try:
-            _token = _cookie_manager.get(_COOKIE_NAME)
-            if _token:
-                _result = _verify_session_token(_token)
-                if _result:
-                    _uid, _uname = _result
-                    st.session_state["authenticated"] = True
-                    st.session_state["username"] = _uname
-                    st.session_state["user_id"] = _uid
-                    st.rerun()
-        except Exception:
-            pass
+    # Restaurar sesión desde cookie si el session_state fue reiniciado (ej. F5)
+    if not st.session_state.get("authenticated", False):
+        _token = _get_session_cookie()
+        if _token:
+            _result = _verify_session_token(_token)
+            if _result:
+                _uid, _uname = _result
+                st.session_state["authenticated"] = True
+                st.session_state["username"] = _uname
+                st.session_state["user_id"] = _uid
+                st.rerun()
 
     if not st.session_state.get("authenticated", False):
-        _render_login_page(_cookie_manager)
+        _render_login_page()
     else:
-        main(_cookie_manager)
+        main()
