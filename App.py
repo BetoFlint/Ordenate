@@ -4,12 +4,13 @@ from datetime import date, datetime
 import hashlib
 import hmac
 import os
+import re
 import time
 
 from logger import log_time
 from db import init_db, add_user_id_columns
 from auth import verify_login, create_user, user_exists, list_users
-from neon_data import load_data as _neon_load_data, save_data as _neon_save_data
+import neon_data as _neon_data
 
 import altair as alt
 import pandas as pd
@@ -158,13 +159,13 @@ def _empty_comentarios_df() -> pd.DataFrame:
 @log_time
 def _load_data(user_id: int) -> dict:
     """Carga los datos del usuario desde Neon. Cacheado por Streamlit."""
-    return _neon_load_data(user_id)
+    return _neon_data.load_data(user_id)
 
 
 @log_time
 def _save_data(data: dict, user_id: int) -> None:
     """Persiste el dict de datos en Neon y limpia el cache para la próxima carga."""
-    _neon_save_data(data, user_id)
+    _neon_data.save_data(data, user_id)
     st.cache_data.clear()
 
 
@@ -690,6 +691,7 @@ def main() -> None:
         st.session_state["authenticated"] = False
         st.session_state["username"] = ""
         st.session_state["user_id"] = None
+        st.session_state["logout_block_cookie_restore"] = True
         _delete_session_cookie()
         st.rerun()
     st.sidebar.divider()
@@ -1524,9 +1526,14 @@ def _render_login_page() -> None:
         with st.form(key="login_form"):
             username = st.text_input("Usuario", placeholder="Ingresa tu usuario")
             password = st.text_input("Contrasena", type="password", placeholder="Ingresa tu contrasena")
-            submitted = st.form_submit_button("Ingresar", use_container_width=True)
+            col_login, col_register = st.columns(2)
+            submitted_login = col_login.form_submit_button("Ingresar", use_container_width=True)
+            submitted_register = col_register.form_submit_button("Registrarse", use_container_width=True)
 
-        if submitted:
+        if submitted_register:
+            st.session_state["show_register_form"] = True
+
+        if submitted_login:
             if not username or not password:
                 st.error("Por favor ingresa usuario y contrasena.")
             else:
@@ -1536,10 +1543,74 @@ def _render_login_page() -> None:
                     st.session_state["authenticated"] = True
                     st.session_state["username"] = username.strip()
                     st.session_state["user_id"] = user_id
+                    st.session_state["logout_block_cookie_restore"] = False
                     st.session_state["_pending_cookie"] = _make_session_token(user_id, username.strip())
                     st.rerun()
                 else:
                     st.error("Usuario o contrasena incorrectos.")
+
+        if st.session_state.get("show_register_form", False):
+            st.divider()
+            st.subheader("Crear cuenta")
+            with st.form(key="register_form"):
+                first_name = st.text_input("Nombre")
+                last_name_paterno = st.text_input("Apellido paterno")
+                last_name_materno = st.text_input("Apellido materno")
+                email = st.text_input("Correo")
+                username_new = st.text_input("Nombre de usuario")
+                password_new = st.text_input("Contrasena", type="password")
+                password_confirm = st.text_input("Confirmar contrasena", type="password")
+                col_create, col_cancel = st.columns(2)
+                submitted_create = col_create.form_submit_button(
+                    "Crear cuenta",
+                    use_container_width=True,
+                )
+                submitted_cancel = col_cancel.form_submit_button(
+                    "Cancelar",
+                    use_container_width=True,
+                )
+
+            if submitted_cancel:
+                st.session_state["show_register_form"] = False
+                st.rerun()
+
+            if submitted_create:
+                required_fields = [
+                    first_name,
+                    last_name_paterno,
+                    last_name_materno,
+                    email,
+                    username_new,
+                    password_new,
+                    password_confirm,
+                ]
+                email_clean = (email or "").strip().lower()
+                email_ok = re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_clean) is not None
+
+                if any(not (f or "").strip() for f in required_fields):
+                    st.error("Completa todos los campos para registrarte.")
+                elif not email_ok:
+                    st.error("Ingresa un correo valido.")
+                elif password_new != password_confirm:
+                    st.error("Las contrasenas no coinciden.")
+                elif len(password_new) < 6:
+                    st.error("La contrasena debe tener al menos 6 caracteres.")
+                elif user_exists(username_new):
+                    st.error("Ese nombre de usuario ya existe.")
+                else:
+                    try:
+                        create_user(
+                            username_new,
+                            password_new,
+                            first_name=first_name,
+                            last_name_paterno=last_name_paterno,
+                            last_name_materno=last_name_materno,
+                            email=email_clean,
+                        )
+                        st.success("Cuenta creada. Ahora puedes iniciar sesion.")
+                        st.session_state["show_register_form"] = False
+                    except Exception as e:
+                        st.error(f"No se pudo crear la cuenta: {e}")
 
 
 if __name__ == "__main__":
@@ -1555,15 +1626,16 @@ if __name__ == "__main__":
 
     # Restaurar sesión desde cookie si el session_state fue reiniciado (ej. F5)
     if not st.session_state.get("authenticated", False):
-        _token = _get_session_cookie()
-        if _token:
-            _result = _verify_session_token(_token)
-            if _result:
-                _uid, _uname = _result
-                st.session_state["authenticated"] = True
-                st.session_state["username"] = _uname
-                st.session_state["user_id"] = _uid
-                st.rerun()
+        if not st.session_state.get("logout_block_cookie_restore", False):
+            _token = _get_session_cookie()
+            if _token:
+                _result = _verify_session_token(_token)
+                if _result:
+                    _uid, _uname = _result
+                    st.session_state["authenticated"] = True
+                    st.session_state["username"] = _uname
+                    st.session_state["user_id"] = _uid
+                    st.rerun()
 
     if not st.session_state.get("authenticated", False):
         _render_login_page()

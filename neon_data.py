@@ -19,6 +19,7 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 
 from db import get_connection
+from data_crypto import decrypt_amount, encrypt_amount
 from logger import log_time
 
 
@@ -85,6 +86,15 @@ def _to_str(val) -> str | None:
     return str(val) if val is not None else None
 
 
+def _read_amount_from_row(enc_value, plain_value) -> float:
+    """Intenta leer primero el valor cifrado; cae a texto plano por compatibilidad."""
+    decrypted = decrypt_amount(_to_str(enc_value))
+    if decrypted is not None:
+        return float(decrypted)
+    plain = _to_float(plain_value)
+    return float(plain) if plain is not None else 0.0
+
+
 # ── LOAD ────────────────────────────────────────────────────────────────────
 
 @log_time
@@ -94,7 +104,7 @@ def load_data(user_id: int) -> dict:
     uid = int(user_id)
     with engine.connect() as conn:
         pagos = pd.read_sql(
-            "SELECT pago_id, gasto_id, nombre, categoria, monto_real, fecha_pago_real, estado "
+            "SELECT pago_id, gasto_id, nombre, categoria, monto_real, monto_real_enc, fecha_pago_real, estado "
             "FROM pagos WHERE user_id = %(uid)s ORDER BY pago_id",
             conn, params={"uid": uid},
         )
@@ -105,14 +115,14 @@ def load_data(user_id: int) -> dict:
         gastos_mensuales = pd.read_sql(
             "SELECT gasto_id, year, month, nombre, categoria, "
             "       periodicidad, fecha_pago, fecha_inicio, fecha_termino, "
-            "       monto_presupuestado "
+            "       monto_presupuestado, monto_presupuestado_enc "
             "FROM gastos_mensuales WHERE user_id = %(uid)s "
             "ORDER BY gasto_id, year, month",
             conn, params={"uid": uid},
         )
         ingresos_mensuales = pd.read_sql(
             "SELECT ingreso_id, year, month, nombre, periodicidad, "
-            "       fecha_pago, fecha_inicio, fecha_termino, monto "
+            "       fecha_pago, fecha_inicio, fecha_termino, monto, monto_enc "
             "FROM ingresos_mensuales WHERE user_id = %(uid)s "
             "ORDER BY ingreso_id, year, month",
             conn, params={"uid": uid},
@@ -131,6 +141,33 @@ def load_data(user_id: int) -> dict:
     ]:
         if col in df.columns:
             df[col] = df[col].astype("Int64")
+
+    if not pagos.empty:
+        pagos["monto_real"] = pagos.apply(
+            lambda r: _read_amount_from_row(r.get("monto_real_enc"), r.get("monto_real")),
+            axis=1,
+        )
+        if "monto_real_enc" in pagos.columns:
+            pagos = pagos.drop(columns=["monto_real_enc"])
+
+    if not gastos_mensuales.empty:
+        gastos_mensuales["monto_presupuestado"] = gastos_mensuales.apply(
+            lambda r: _read_amount_from_row(
+                r.get("monto_presupuestado_enc"),
+                r.get("monto_presupuestado"),
+            ),
+            axis=1,
+        )
+        if "monto_presupuestado_enc" in gastos_mensuales.columns:
+            gastos_mensuales = gastos_mensuales.drop(columns=["monto_presupuestado_enc"])
+
+    if not ingresos_mensuales.empty:
+        ingresos_mensuales["monto"] = ingresos_mensuales.apply(
+            lambda r: _read_amount_from_row(r.get("monto_enc"), r.get("monto")),
+            axis=1,
+        )
+        if "monto_enc" in ingresos_mensuales.columns:
+            ingresos_mensuales = ingresos_mensuales.drop(columns=["monto_enc"])
 
     # Si cuenta está vacía, inicializarla con saldo 0
     if cuenta.empty:
@@ -183,7 +220,8 @@ def save_data(data: dict, user_id: int) -> None:
                     _to_int(r["gasto_id"]),
                     _to_str(r.get("nombre")),
                     _to_str(r.get("categoria")),
-                    _to_float(r.get("monto_real")),
+                    None,
+                    _to_str(encrypt_amount(_to_float(r.get("monto_real")))),
                     _to_pg_date(r.get("fecha_pago_real")),
                     _to_str(r.get("estado")),
                     uid,
@@ -192,7 +230,7 @@ def save_data(data: dict, user_id: int) -> None:
             ]
             psycopg2.extras.execute_values(cur, """
                 INSERT INTO pagos (pago_id, gasto_id, nombre, categoria,
-                                   monto_real, fecha_pago_real, estado, user_id)
+                                   monto_real, monto_real_enc, fecha_pago_real, estado, user_id)
                 VALUES %s;
             """, pagos_rows)
             cur.execute(
@@ -218,7 +256,8 @@ def save_data(data: dict, user_id: int) -> None:
                     _to_int(r.get("fecha_pago")),
                     _to_pg_date(r.get("fecha_inicio")),
                     _to_pg_date(r.get("fecha_termino")),
-                    _to_float(r.get("monto_presupuestado")),
+                    None,
+                    _to_str(encrypt_amount(_to_float(r.get("monto_presupuestado")))),
                     uid,
                 )
                 for _, r in gastos_mensuales_df.iterrows()
@@ -227,7 +266,7 @@ def save_data(data: dict, user_id: int) -> None:
                 INSERT INTO gastos_mensuales
                     (gasto_id, year, month, nombre, categoria,
                      periodicidad, fecha_pago, fecha_inicio, fecha_termino,
-                     monto_presupuestado, user_id)
+                     monto_presupuestado, monto_presupuestado_enc, user_id)
                 VALUES %s;
             """, gm_rows)
 
@@ -243,7 +282,8 @@ def save_data(data: dict, user_id: int) -> None:
                     _to_int(r.get("fecha_pago")),
                     _to_pg_date(r.get("fecha_inicio")),
                     _to_pg_date(r.get("fecha_termino")),
-                    _to_float(r.get("monto")),
+                    None,
+                    _to_str(encrypt_amount(_to_float(r.get("monto")))),
                     uid,
                 )
                 for _, r in ingresos_mensuales_df.iterrows()
@@ -251,7 +291,7 @@ def save_data(data: dict, user_id: int) -> None:
             psycopg2.extras.execute_values(cur, """
                 INSERT INTO ingresos_mensuales
                     (ingreso_id, year, month, nombre, periodicidad,
-                     fecha_pago, fecha_inicio, fecha_termino, monto, user_id)
+                     fecha_pago, fecha_inicio, fecha_termino, monto, monto_enc, user_id)
                 VALUES %s;
             """, im_rows)
 

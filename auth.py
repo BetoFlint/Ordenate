@@ -47,16 +47,37 @@ def verify_login(username: str, password: str) -> int | None:
 
 
 @log_time
-def create_user(username: str, password: str) -> None:
+def create_user(
+    username: str,
+    password: str,
+    first_name: str | None = None,
+    last_name_paterno: str | None = None,
+    last_name_materno: str | None = None,
+    email: str | None = None,
+) -> None:
     """Inserta un nuevo usuario con contraseña hasheada.
 
-    Lanza psycopg2.errors.UniqueViolation si el usuario ya existe.
+    Lanza psycopg2.errors.UniqueViolation si el usuario o email ya existe.
     """
     hashed = _hash_password(password)
-    sql = "INSERT INTO users (username, password) VALUES (%s, %s);"
+    sql = (
+        "INSERT INTO users "
+        "(username, password, first_name, last_name_paterno, last_name_materno, email) "
+        "VALUES (%s, %s, %s, %s, %s, %s);"
+    )
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (username.strip(), hashed))
+            cur.execute(
+                sql,
+                (
+                    username.strip(),
+                    hashed,
+                    (first_name or "").strip() or None,
+                    (last_name_paterno or "").strip() or None,
+                    (last_name_materno or "").strip() or None,
+                    (email or "").strip().lower() or None,
+                ),
+            )
         conn.commit()
 
 

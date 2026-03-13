@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS gastos_mensuales (
     fecha_termino       DATE,
     monto_presupuestado NUMERIC(14,2),
     user_id             INTEGER REFERENCES users(id),
-    UNIQUE(gasto_id, year, month)
+    UNIQUE(user_id, gasto_id, year, month)
 );
 
 CREATE TABLE IF NOT EXISTS ingresos_mensuales (
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS ingresos_mensuales (
     fecha_termino DATE,
     monto         NUMERIC(14,2),
     user_id       INTEGER REFERENCES users(id),
-    UNIQUE(ingreso_id, year, month)
+    UNIQUE(user_id, ingreso_id, year, month)
 );
 
 CREATE TABLE IF NOT EXISTS comentarios (
